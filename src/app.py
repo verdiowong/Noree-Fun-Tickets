@@ -160,6 +160,62 @@ def get_event(event_id):
         return jsonify({'error': 'Event not found'}), 404
     return jsonify(event.to_dict()), 200
 
+# User booking event route
+@app.route('/api/events/<event_id>/book', methods=['POST'])
+@require_auth
+def book_event(event_id):
+    event = events.get(event_id)
+    if not event:
+        return jsonify({'error': 'Event not found'}), 404
+
+    data = request.get_json() or {}
+    num_tickets = int(data.get('num_tickets', 1))
+    user_id = data.get('user_id')
+
+    if not user_id:
+        return jsonify({'error': 'Missing user_id'}), 400
+
+    if num_tickets <= 0:
+        return jsonify({'error': 'Invalid ticket quantity'}), 400
+
+    # Ensure enough seats remain
+    total_booked = sum(b.num_tickets for b in bookings.values() if b.event_id == event_id)
+    available = event.total_seats - total_booked
+    if num_tickets > available:
+        return jsonify({'error': 'Not enough seats available'}), 400
+
+    # Create booking
+    booking = Booking(user_id=user_id, event_id=event_id, num_tickets=num_tickets)
+    bookings[booking.booking_id] = booking
+
+    return jsonify({
+        'message': 'Booking successful',
+        'booking': booking.to_dict(),
+        'remaining_seats': available - num_tickets
+    }), 201
+
+# View user's booking
+@app.route('/api/bookings', methods=['GET'])
+@require_auth
+def get_user_bookings():
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Missing user_id'}), 400
+
+    user_bookings = [b.to_dict() for b in bookings.values() if b.user_id == user_id]
+    return jsonify(user_bookings), 200
+
+# Show cancel user's booking
+@app.route('/api/bookings/<booking_id>', methods=['DELETE'])
+@require_auth
+def cancel_booking(booking_id):
+    booking = bookings.get(booking_id)
+    if not booking:
+        return jsonify({'error': 'Booking not found'}), 404
+
+    del bookings[booking_id]
+    return jsonify({'message': 'Booking cancelled successfully'}), 200
+
 if __name__ == '__main__':
     # Sample events for testing
     sample1 = Event(
