@@ -213,8 +213,22 @@ def cancel_booking(booking_id):
     if not booking:
         return jsonify({'error': 'Booking not found'}), 404
 
+    event = events.get(booking.event_id)
+    if not event:
+        return jsonify({'error': 'Associated event not found'}), 404
+
+    # Restore seats (only if tracking them manually)
+    event.total_seats += booking.num_tickets
+
+    # Remove booking record
     del bookings[booking_id]
-    return jsonify({'message': 'Booking cancelled successfully'}), 200
+
+    return jsonify({
+        'message': 'Booking cancelled successfully',
+        'restored_seats': booking.num_tickets,
+        'updated_total_seats': event.total_seats
+    }), 200
+
 
 if __name__ == '__main__':
     # Sample events for testing
