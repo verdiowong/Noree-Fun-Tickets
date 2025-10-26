@@ -35,9 +35,30 @@ class Event:
             'created_by': self.created_by,
             'created_at': self.created_at
         }
+    
+# Booking class
+class Booking:
+    def __init__(self, user_id, event_id, num_tickets=1):
+        self.booking_id = str(uuid.uuid4())
+        self.user_id = user_id
+        self.event_id = event_id
+        self.num_tickets = num_tickets
+        self.created_at = datetime.now(UTC).isoformat()
+
+    def to_dict(self):
+        return {
+            'booking_id': self.booking_id,
+            'user_id': self.user_id,
+            'event_id': self.event_id,
+            'num_tickets': self.num_tickets,
+            'created_at': self.created_at
+        }
 
 # In-memory storage
 events = {}
+
+# In-memory booking storage
+bookings = {}
 
 # Auth decorators
 def require_admin(f):
