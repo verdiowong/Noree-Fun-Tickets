@@ -178,11 +178,12 @@ def book_event(event_id):
     if num_tickets <= 0:
         return jsonify({'error': 'Invalid ticket quantity'}), 400
 
-    # Ensure enough seats remain
-    total_booked = sum(b.num_tickets for b in bookings.values() if b.event_id == event_id)
-    available = event.total_seats - total_booked
-    if num_tickets > available:
+    # Check availability
+    if num_tickets > event.total_seats:
         return jsonify({'error': 'Not enough seats available'}), 400
+
+    # Deduct booked seats
+    event.total_seats -= num_tickets
 
     # Create booking
     booking = Booking(user_id=user_id, event_id=event_id, num_tickets=num_tickets)
@@ -191,7 +192,7 @@ def book_event(event_id):
     return jsonify({
         'message': 'Booking successful',
         'booking': booking.to_dict(),
-        'remaining_seats': available - num_tickets
+        'remaining_seats': event.total_seats
     }), 201
 
 # View user's booking
