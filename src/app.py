@@ -6,10 +6,12 @@ import uuid
 app = Flask(__name__)
 CORS(app)
 
+
 # Event class matching the database schema
 class Event:
-    def __init__(self, title, description, venue, date, total_seats, price,
-                 event_image=None, venue_image=None, created_by=None, event_id=None):
+    def __init__(self, title, description, venue, date, total_seats, \
+                price, event_image=None, venue_image=None, \
+                created_by=None, event_id=None):
         self.event_id = event_id or str(uuid.uuid4())
         self.event_image = event_image  # base64 string
         self.title = title
@@ -21,7 +23,7 @@ class Event:
         self.price = price
         self.created_by = created_by  # UUID of the user who created it
         self.created_at = datetime.now(UTC).isoformat()
-    
+
     def to_dict(self):
         return {
             'event_id': self.event_id,
@@ -35,7 +37,8 @@ class Event:
             'created_by': self.created_by,
             'created_at': self.created_at
         }
-    
+
+
 # Booking class
 class Booking:
     def __init__(self, user_id, event_id, num_tickets=1):
@@ -54,11 +57,14 @@ class Booking:
             'created_at': self.created_at
         }
 
+
 # In-memory storage
 events = {}
 
+
 # In-memory booking storage
 bookings = {}
+
 
 # Auth decorators
 def require_admin(f):
@@ -72,6 +78,7 @@ def require_admin(f):
     wrapper.__name__ = f.__name__
     return wrapper
 
+
 def require_auth(f):
     def wrapper(*args, **kwargs):
         auth_header = request.headers.get('Authorization')
@@ -81,18 +88,19 @@ def require_auth(f):
     wrapper.__name__ = f.__name__
     return wrapper
 
+
 # Admin Routes
 @app.route('/api/admin/events', methods=['POST'])
 @require_admin
 def create_event():
     data = request.get_json()
-    
+
     # Validate required fields
     required_fields = ['title', 'description', 'venue', 'date', 'total_seats']
     for field in required_fields:
         if field not in data:
             return jsonify({'error': f'Missing required field: {field}'}), 400
-    
+
     event = Event(
         title=data['title'],
         description=data['description'],
@@ -107,6 +115,7 @@ def create_event():
     events[event.event_id] = event
     return jsonify(event.to_dict()), 201
 
+
 @app.route('/api/admin/events/<event_id>', methods=['GET'])
 @require_admin
 def get_event_admin(event_id):
@@ -115,10 +124,12 @@ def get_event_admin(event_id):
         return jsonify({'error': 'Event not found'}), 404
     return jsonify(event.to_dict()), 200
 
+
 @app.route('/api/admin/events', methods=['GET'])
 @require_admin
 def get_all_events_admin():
     return jsonify([event.to_dict() for event in events.values()]), 200
+
 
 @app.route('/api/admin/events/<event_id>', methods=['PUT'])
 @require_admin
@@ -126,7 +137,7 @@ def update_event(event_id):
     event = events.get(event_id)
     if not event:
         return jsonify({'error': 'Event not found'}), 404
-    
+
     data = request.get_json()
     # Update allowed fields
     for field in ['title', 'description', 'venue', 'date', 'total_seats', 
@@ -135,6 +146,7 @@ def update_event(event_id):
             setattr(event, field, data[field])
     
     return jsonify(event.to_dict()), 200
+
 
 @app.route('/api/admin/events/<event_id>', methods=['DELETE'])
 @require_admin
@@ -146,12 +158,15 @@ def delete_event(event_id):
     del events[event_id]
     return jsonify({'message': 'Event deleted successfully'}), 200
 
+
 # User Routes
 @app.route('/api/events', methods=['GET'])
 @require_auth
 def get_all_events():
     return jsonify([event.to_dict() for event in events.values()]), 200
 
+
+# User get a single event
 @app.route('/api/events/<event_id>', methods=['GET'])
 @require_auth
 def get_event(event_id):
@@ -159,6 +174,7 @@ def get_event(event_id):
     if not event:
         return jsonify({'error': 'Event not found'}), 404
     return jsonify(event.to_dict()), 200
+
 
 # User booking event route
 @app.route('/api/events/<event_id>/book', methods=['POST'])
@@ -195,6 +211,7 @@ def book_event(event_id):
         'remaining_seats': event.total_seats
     }), 201
 
+
 # View user's booking
 @app.route('/api/bookings', methods=['GET'])
 @require_auth
@@ -205,6 +222,7 @@ def get_user_bookings():
 
     user_bookings = [b.to_dict() for b in bookings.values() if b.user_id == user_id]
     return jsonify(user_bookings), 200
+
 
 # Show cancel user's booking
 @app.route('/api/bookings/<booking_id>', methods=['DELETE'])
@@ -218,7 +236,7 @@ def cancel_booking(booking_id):
     if not event:
         return jsonify({'error': 'Associated event not found'}), 404
 
-    # Restore seats (only if tracking them manually)
+    # Restore seats
     event.total_seats += booking.num_tickets
 
     # Remove booking record
