@@ -9,8 +9,8 @@ CORS(app)
 
 # Event class matching the database schema
 class Event:
-    def __init__(self, title, description, venue, date, total_seats, \
-                price, event_image=None, venue_image=None, \
+    def __init__(self, title, description, venue, date, total_seats,
+                price, event_image=None, venue_image=None,
                 created_by=None, event_id=None):
         self.event_id = event_id or str(uuid.uuid4())
         self.event_image = event_image  # base64 string
@@ -140,11 +140,11 @@ def update_event(event_id):
 
     data = request.get_json()
     # Update allowed fields
-    for field in ['title', 'description', 'venue', 'date', 'total_seats', 
+    for field in ['title', 'description', 'venue', 'date', 'total_seats',
                   'event_image', 'venue_image']:
         if field in data:
             setattr(event, field, data[field])
-    
+
     return jsonify(event.to_dict()), 200
 
 
@@ -202,7 +202,8 @@ def book_event(event_id):
     event.total_seats -= num_tickets
 
     # Create booking
-    booking = Booking(user_id=user_id, event_id=event_id, num_tickets=num_tickets)
+    booking = Booking(user_id=user_id, event_id=event_id,
+                      num_tickets=num_tickets)
     bookings[booking.booking_id] = booking
 
     return jsonify({
@@ -220,7 +221,8 @@ def get_user_bookings():
     if not user_id:
         return jsonify({'error': 'Missing user_id'}), 400
 
-    user_bookings = [b.to_dict() for b in bookings.values() if b.user_id == user_id]
+    user_bookings = [b.to_dict() for b in bookings.values() 
+                    if b.user_id == user_id]
     return jsonify(user_bookings), 200
 
 
@@ -263,7 +265,7 @@ if __name__ == '__main__':
         created_by='123e4567-e89b-12d3-a456-426614174000',
         event_id='1'
     )
-    
+
     sample2 = Event(
         title='Tech Conference 2025',
         description='Annual technology conference with industry leaders',
@@ -276,8 +278,8 @@ if __name__ == '__main__':
         created_by='123e4567-e89b-12d3-a456-426614174000',
         event_id='2'
     )
-    
+
     events[sample1.event_id] = sample1
     events[sample2.event_id] = sample2
-    
+
     app.run(debug=True, host='0.0.0.0', port=5000)
