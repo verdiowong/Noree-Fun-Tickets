@@ -1,3 +1,0 @@
-Flask
-stripe
-boto3
