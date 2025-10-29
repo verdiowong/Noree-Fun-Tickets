@@ -10,8 +10,8 @@ CORS(app)
 # Event class matching the database schema
 class Event:
     def __init__(self, title, description, venue, date, total_seats,
-                price, event_image=None, venue_image=None,
-                created_by=None, event_id=None):
+                 price, event_image=None, venue_image=None,
+                 created_by=None, event_id=None):
         self.event_id = event_id or str(uuid.uuid4())
         self.event_image = event_image  # base64 string
         self.title = title
@@ -221,8 +221,8 @@ def get_user_bookings():
     if not user_id:
         return jsonify({'error': 'Missing user_id'}), 400
 
-    user_bookings = [b.to_dict() for b in bookings.values() 
-                    if b.user_id == user_id]
+    user_bookings = [b.to_dict() for b in bookings.values()
+                     if b.user_id == user_id]
     return jsonify(user_bookings), 200
 
 
@@ -259,7 +259,7 @@ if __name__ == '__main__':
         venue='Central Park, Singapore',
         date='2025-07-15T18:00:00Z',
         total_seats=5000,
-        price = 100,
+        price=100,
         event_image='data:image/png;base64,iVBORw0KGgo...',  # Placeholder
         venue_image='data:image/png;base64,iVBORw0KGgo...',  # Placeholder
         created_by='123e4567-e89b-12d3-a456-426614174000',
