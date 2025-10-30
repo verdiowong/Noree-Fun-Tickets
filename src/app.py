@@ -1,6 +1,7 @@
 import os
 import time
 import jwt
+from .models import User, Event
 from datetime import datetime, UTC, timedelta
 from typing import Optional
 from flask import Flask, request, jsonify
@@ -9,7 +10,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 load_dotenv()
 
-from models import User, Event
+
 
 # -------------------------
 # Config
