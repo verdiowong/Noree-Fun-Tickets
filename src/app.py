@@ -1,7 +1,7 @@
 import os
 import time
 import jwt
-from .models import User, Event
+from models import User, Event
 from datetime import datetime, UTC, timedelta
 from typing import Optional
 from flask import Flask, request, jsonify
