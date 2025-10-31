@@ -7,6 +7,13 @@ app = Flask(__name__)
 CORS(app)
 
 
+# @app.route('/healthz', methods=['GET'])
+# def healthz():
+#     return jsonify({
+#         'status': 'ok',
+#         'service': 'ticket-booking'
+#     }), 200
+
 # Event class matching the database schema
 class Event:
     def __init__(self, title, description, venue, date, total_seats,
