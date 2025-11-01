@@ -12,7 +12,8 @@ CORS(app)
 
 
 # Initialise DynamoDB
-dynamodb = boto3.resource('dynamodb', region_name='ap-southeast-1')  # Singapore region
+dynamodb = boto3.resource('dynamodb',\
+                          region_name='ap-southeast-1')  # Singapore region
 events_table = dynamodb.Table('Events')
 bookings_table = dynamodb.Table('Bookings')
 
@@ -90,7 +91,8 @@ class Event:
 
 # Booking class
 class Booking:
-    def __init__(self, user_id, event_id, num_tickets=1, booking_id=None, created_at=None):
+    def __init__(self, user_id, event_id, num_tickets=1,\
+                 booking_id=None, created_at=None):
         self.booking_id = booking_id or str(uuid.uuid4())
         self.user_id = user_id
         self.event_id = event_id
@@ -169,7 +171,7 @@ def create_event():
     # Save to DynamoDB
     event_dict = convert_to_decimal(event.to_dict())
     events_table.put_item(Item=event_dict)
-    
+
     return jsonify(event.to_dict()), 201
 
 
@@ -180,7 +182,7 @@ def get_event_admin(event_id):
     event_id = str(event_id)
 
     response = events_table.get_item(Key={'event_id': event_id})
-    
+
     if 'Item' not in response:
         return jsonify({'error': 'Event not found'}), 404
 
@@ -252,7 +254,7 @@ def get_all_events():
 def get_event(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
-    
+
     response = events_table.get_item(Key={'event_id': event_id})
 
     if 'Item' not in response:
@@ -300,7 +302,8 @@ def book_event(event_id):
     )
 
     # Create booking
-    booking = Booking(user_id=user_id, event_id=event_id, num_tickets=num_tickets)
+    booking = Booking(user_id=user_id, event_id=event_id,\
+                      num_tickets=num_tickets)
     booking_dict = convert_to_decimal(booking.to_dict())
     bookings_table.put_item(Item=booking_dict)
 
@@ -327,7 +330,8 @@ def get_user_bookings():
         KeyConditionExpression=Key('user_id').eq(user_id)
     )
 
-    user_bookings = [Booking.from_dict(item).to_dict() for item in response['Items']]
+    user_bookings = [Booking.from_dict(item).to_dict()\
+                     for item in response['Items']]
     return jsonify(user_bookings), 200
 
 
