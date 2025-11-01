@@ -174,7 +174,7 @@ def create_event():
     # Save to DynamoDB
     event_dict = convert_to_decimal(event.to_dict())
     events_table.put_item(Item=event_dict)
-    
+
     return jsonify(event.to_dict()), 201
 
 
@@ -183,7 +183,7 @@ def create_event():
 @require_admin
 def get_event_admin(event_id):
     response = events_table.get_item(Key={'event_id': event_id})
-    
+
     if 'Item' not in response:
         return jsonify({'error': 'Event not found'}), 404
 
@@ -252,7 +252,7 @@ def get_all_events():
 @require_auth
 def get_event(event_id):
     response = events_table.get_item(Key={'event_id': event_id})
-    
+
     if 'Item' not in response:
         return jsonify({'error': 'Event not found'}), 404
 
@@ -270,7 +270,7 @@ def book_event(event_id):
         return jsonify({'error': 'Event not found'}), 404
 
     event = Event.from_dict(response['Item'])
-    
+
     data = request.get_json() or {}
     num_tickets = int(data.get('num_tickets', 1))
     user_id = data.get('user_id')
@@ -296,7 +296,8 @@ def book_event(event_id):
     )
 
     # Create booking
-    booking = Booking(user_id=user_id, event_id=event_id, num_tickets=num_tickets)
+    booking = Booking(user_id=user_id, event_id=event_id,
+                      num_tickets=num_tickets)
     booking_dict = convert_to_decimal(booking.to_dict())
     bookings_table.put_item(Item=booking_dict)
 
@@ -321,7 +322,8 @@ def get_user_bookings():
         KeyConditionExpression=Key('user_id').eq(user_id)
     )
 
-    user_bookings = [Booking.from_dict(item).to_dict() for item in response['Items']]
+    user_bookings = [Booking.from_dict(item).to_dict()
+                     for item in response['Items']]
     return jsonify(user_bookings), 200
 
 
