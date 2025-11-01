@@ -12,7 +12,7 @@ CORS(app)
 
 
 # Initialise DynamoDB
-dynamodb = boto3.resource('dynamodb',\
+dynamodb = boto3.resource('dynamodb',
                           region_name='ap-southeast-1')  # Singapore region
 events_table = dynamodb.Table('Events')
 bookings_table = dynamodb.Table('Bookings')
@@ -91,7 +91,7 @@ class Event:
 
 # Booking class
 class Booking:
-    def __init__(self, user_id, event_id, num_tickets=1,\
+    def __init__(self, user_id, event_id, num_tickets=1,
                  booking_id=None, created_at=None):
         self.booking_id = booking_id or str(uuid.uuid4())
         self.user_id = user_id
@@ -302,7 +302,7 @@ def book_event(event_id):
     )
 
     # Create booking
-    booking = Booking(user_id=user_id, event_id=event_id,\
+    booking = Booking(user_id=user_id, event_id=event_id,
                       num_tickets=num_tickets)
     booking_dict = convert_to_decimal(booking.to_dict())
     bookings_table.put_item(Item=booking_dict)
@@ -330,7 +330,7 @@ def get_user_bookings():
         KeyConditionExpression=Key('user_id').eq(user_id)
     )
 
-    user_bookings = [Booking.from_dict(item).to_dict()\
+    user_bookings = [Booking.from_dict(item).to_dict()
                      for item in response['Items']]
     return jsonify(user_bookings), 200
 
