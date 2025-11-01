@@ -6,12 +6,13 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from decimal import Decimal
 
+
 app = Flask(__name__)
 CORS(app)
 
 
 # Initialise DynamoDB
-dynamodb = boto3.resource('dynamodb', region_name='ap-southeast-1')
+dynamodb = boto3.resource('dynamodb', region_name='ap-southeast-1')  # Singapore region
 events_table = dynamodb.Table('Events')
 bookings_table = dynamodb.Table('Bookings')
 
@@ -35,14 +36,8 @@ def convert_from_decimal(obj):
         return {k: convert_from_decimal(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [convert_from_decimal(item) for item in obj]
+    return obj
 
-
-# @app.route('/healthz', methods=['GET'])
-# def healthz():
-#     return jsonify({
-#         'status': 'ok',
-#         'service': 'ticket-booking'
-#     }), 200
 
 # Event class matching the database schema
 class Event:
@@ -50,15 +45,15 @@ class Event:
                  price, event_image=None, venue_image=None,
                  created_by=None, event_id=None):
         self.event_id = event_id or str(uuid.uuid4())
-        self.event_image = event_image  # base64 string
+        self.event_image = event_image
         self.title = title
         self.description = description
         self.venue = venue
-        self.venue_image = venue_image  # base64 string
-        self.date = date  # ISO format timestamp
+        self.venue_image = venue_image
+        self.date = date
         self.total_seats = total_seats
         self.price = price
-        self.created_by = created_by  # UUID of the user who created it
+        self.created_by = created_by
         self.created_at = datetime.now(UTC).isoformat()
 
     def to_dict(self):
@@ -71,6 +66,7 @@ class Event:
             'venue_image': self.venue_image,
             'date': self.date,
             'total_seats': self.total_seats,
+            'price': self.price,
             'created_by': self.created_by,
             'created_at': self.created_at
         }
@@ -94,12 +90,12 @@ class Event:
 
 # Booking class
 class Booking:
-    def __init__(self, user_id, event_id, num_tickets=1):
-        self.booking_id = str(uuid.uuid4())
+    def __init__(self, user_id, event_id, num_tickets=1, booking_id=None, created_at=None):
+        self.booking_id = booking_id or str(uuid.uuid4())
         self.user_id = user_id
         self.event_id = event_id
         self.num_tickets = num_tickets
-        self.created_at = datetime.now(UTC).isoformat()
+        self.created_at = created_at or datetime.now(UTC).isoformat()
 
     def to_dict(self):
         return {
@@ -113,14 +109,13 @@ class Booking:
     @staticmethod
     def from_dict(data):
         data = convert_from_decimal(data)
-        booking = Booking(
+        return Booking(
             user_id=data['user_id'],
             event_id=data['event_id'],
             num_tickets=data['num_tickets'],
-            booking_id=data['booking_id']
+            booking_id=data['booking_id'],
+            created_at=data.get('created_at')
         )
-        booking.created_at = data.get('created_at', booking.created_at)
-        return booking
 
 
 # Auth decorators
@@ -146,7 +141,7 @@ def require_auth(f):
     return wrapper
 
 
-# Admin Route: Adding an event
+# Admin Routes
 @app.route('/api/admin/events', methods=['POST'])
 @require_admin
 def create_event():
@@ -174,16 +169,18 @@ def create_event():
     # Save to DynamoDB
     event_dict = convert_to_decimal(event.to_dict())
     events_table.put_item(Item=event_dict)
-
+    
     return jsonify(event.to_dict()), 201
 
 
-# Admin Route: GEtting a single event
 @app.route('/api/admin/events/<event_id>', methods=['GET'])
 @require_admin
 def get_event_admin(event_id):
-    response = events_table.get_item(Key={'event_id': event_id})
+    # Ensure event_id is string
+    event_id = str(event_id)
 
+    response = events_table.get_item(Key={'event_id': event_id})
+    
     if 'Item' not in response:
         return jsonify({'error': 'Event not found'}), 404
 
@@ -199,10 +196,12 @@ def get_all_events_admin():
     return jsonify(events), 200
 
 
-# Admin Route: Editing details of an event
 @app.route('/api/admin/events/<event_id>', methods=['PUT'])
 @require_admin
 def update_event(event_id):
+    # Ensure event_id is string
+    event_id = str(event_id)
+
     # Check if event exists
     response = events_table.get_item(Key={'event_id': event_id})
     if 'Item' not in response:
@@ -224,10 +223,12 @@ def update_event(event_id):
     return jsonify(event.to_dict()), 200
 
 
-# Admin Route: Deleting an event
 @app.route('/api/admin/events/<event_id>', methods=['DELETE'])
 @require_admin
 def delete_event(event_id):
+    # Ensure event_id is string
+    event_id = str(event_id)
+
     # Check if event exists
     response = events_table.get_item(Key={'event_id': event_id})
     if 'Item' not in response:
@@ -237,8 +238,7 @@ def delete_event(event_id):
     return jsonify({'message': 'Event deleted successfully'}), 200
 
 
-# User Route: Getting all event
-@app.route('/api/events', methods=['GET'])
+# User Routes
 @app.route('/api/events', methods=['GET'])
 @require_auth
 def get_all_events():
@@ -247,10 +247,12 @@ def get_all_events():
     return jsonify(events), 200
 
 
-# User Route: Getting a single event
 @app.route('/api/events/<event_id>', methods=['GET'])
 @require_auth
 def get_event(event_id):
+    # Ensure event_id is string
+    event_id = str(event_id)
+    
     response = events_table.get_item(Key={'event_id': event_id})
 
     if 'Item' not in response:
@@ -260,10 +262,12 @@ def get_event(event_id):
     return jsonify(event.to_dict()), 200
 
 
-# User Route: Booking an event
 @app.route('/api/events/<event_id>/book', methods=['POST'])
 @require_auth
 def book_event(event_id):
+    # Ensure event_id is string
+    event_id = str(event_id)
+
     # Get event
     response = events_table.get_item(Key={'event_id': event_id})
     if 'Item' not in response:
@@ -273,7 +277,7 @@ def book_event(event_id):
 
     data = request.get_json() or {}
     num_tickets = int(data.get('num_tickets', 1))
-    user_id = data.get('user_id')
+    user_id = str(data.get('user_id', ''))
 
     if not user_id:
         return jsonify({'error': 'Missing user_id'}), 400
@@ -296,8 +300,7 @@ def book_event(event_id):
     )
 
     # Create booking
-    booking = Booking(user_id=user_id, event_id=event_id,
-                      num_tickets=num_tickets)
+    booking = Booking(user_id=user_id, event_id=event_id, num_tickets=num_tickets)
     booking_dict = convert_to_decimal(booking.to_dict())
     bookings_table.put_item(Item=booking_dict)
 
@@ -308,7 +311,6 @@ def book_event(event_id):
     }), 201
 
 
-# User Route: View their booking
 @app.route('/api/bookings', methods=['GET'])
 @require_auth
 def get_user_bookings():
@@ -316,21 +318,25 @@ def get_user_bookings():
     if not user_id:
         return jsonify({'error': 'Missing user_id'}), 400
 
+    # Ensure user_id is string
+    user_id = str(user_id)
+
     # Query bookings by user_id using GSI
     response = bookings_table.query(
         IndexName='UserIdIndex',
         KeyConditionExpression=Key('user_id').eq(user_id)
     )
 
-    user_bookings = [Booking.from_dict(item).to_dict()
-                     for item in response['Items']]
+    user_bookings = [Booking.from_dict(item).to_dict() for item in response['Items']]
     return jsonify(user_bookings), 200
 
 
-# User Route: Cancel booking
 @app.route('/api/bookings/<booking_id>', methods=['DELETE'])
 @require_auth
 def cancel_booking(booking_id):
+    # Ensure booking_id is string
+    booking_id = str(booking_id)
+
     # Get booking
     response = bookings_table.get_item(Key={'booking_id': booking_id})
     if 'Item' not in response:
@@ -338,8 +344,9 @@ def cancel_booking(booking_id):
 
     booking = Booking.from_dict(response['Item'])
 
-    # Get associated event
-    event_response = events_table.get_item(Key={'event_id': booking.event_id})
+    # Get associated event - ensure event_id is a string
+    event_id = str(booking.event_id)
+    event_response = events_table.get_item(Key={'event_id': event_id})
     if 'Item' not in event_response:
         return jsonify({'error': 'Associated event not found'}), 404
 
@@ -350,7 +357,7 @@ def cancel_booking(booking_id):
 
     # Update event in DynamoDB
     events_table.update_item(
-        Key={'event_id': booking.event_id},
+        Key={'event_id': event_id},
         UpdateExpression='SET total_seats = :seats',
         ExpressionAttributeValues={':seats': event.total_seats}
     )
