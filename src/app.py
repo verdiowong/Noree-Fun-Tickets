@@ -2,9 +2,39 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, UTC
 import uuid
+import boto3
+from boto3.dynamodb.conditions import Key
+from decimal import Decimal
 
 app = Flask(__name__)
 CORS(app)
+
+
+# Initialise DynamoDB
+dynamodb = boto3.resource('dynamodb', region_name='ap-southeast-1')
+events_table = dynamodb.Table('Events')
+bookings_table = dynamodb.Table('Bookings')
+
+
+# Helper function to convert float to Decimal for DynamoDB
+def convert_to_decimal(obj):
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: convert_to_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_decimal(item) for item in obj]
+    return obj
+
+
+# Helper function to convert Decimal to float for JSON serialization
+def convert_from_decimal(obj):
+    if isinstance(obj, Decimal):
+        return float(obj) if obj % 1 else int(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_from_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_from_decimal(item) for item in obj]
 
 
 # @app.route('/healthz', methods=['GET'])
@@ -45,6 +75,22 @@ class Event:
             'created_at': self.created_at
         }
 
+    @staticmethod
+    def from_dict(data):
+        data = convert_from_decimal(data)
+        return Event(
+            title=data['title'],
+            description=data['description'],
+            venue=data['venue'],
+            date=data['date'],
+            total_seats=data['total_seats'],
+            price=data.get('price'),
+            event_image=data.get('event_image'),
+            venue_image=data.get('venue_image'),
+            created_by=data.get('created_by'),
+            event_id=data['event_id']
+        )
+
 
 # Booking class
 class Booking:
@@ -64,13 +110,17 @@ class Booking:
             'created_at': self.created_at
         }
 
-
-# In-memory storage
-events = {}
-
-
-# In-memory booking storage
-bookings = {}
+    @staticmethod
+    def from_dict(data):
+        data = convert_from_decimal(data)
+        booking = Booking(
+            user_id=data['user_id'],
+            event_id=data['event_id'],
+            num_tickets=data['num_tickets'],
+            booking_id=data['booking_id']
+        )
+        booking.created_at = data.get('created_at', booking.created_at)
+        return booking
 
 
 # Auth decorators
@@ -96,7 +146,7 @@ def require_auth(f):
     return wrapper
 
 
-# Admin Routes
+# Admin Route: Adding an event
 @app.route('/api/admin/events', methods=['POST'])
 @require_admin
 def create_event():
@@ -114,83 +164,113 @@ def create_event():
         venue=data['venue'],
         date=data['date'],
         total_seats=data['total_seats'],
+        price=data.get('price'),
         event_image=data.get('event_image'),
         venue_image=data.get('venue_image'),
         created_by=data.get('created_by'),
-        event_id=data.get('event_id')  # Optional: allow custom ID for testing
+        event_id=data.get('event_id')
     )
-    events[event.event_id] = event
+
+    # Save to DynamoDB
+    event_dict = convert_to_decimal(event.to_dict())
+    events_table.put_item(Item=event_dict)
+    
     return jsonify(event.to_dict()), 201
 
 
+# Admin Route: GEtting a single event
 @app.route('/api/admin/events/<event_id>', methods=['GET'])
 @require_admin
 def get_event_admin(event_id):
-    event = events.get(event_id)
-    if not event:
+    response = events_table.get_item(Key={'event_id': event_id})
+    
+    if 'Item' not in response:
         return jsonify({'error': 'Event not found'}), 404
+
+    event = Event.from_dict(response['Item'])
     return jsonify(event.to_dict()), 200
 
 
 @app.route('/api/admin/events', methods=['GET'])
 @require_admin
 def get_all_events_admin():
-    return jsonify([event.to_dict() for event in events.values()]), 200
+    response = events_table.scan()
+    events = [Event.from_dict(item).to_dict() for item in response['Items']]
+    return jsonify(events), 200
 
 
+# Admin Route: Editing details of an event
 @app.route('/api/admin/events/<event_id>', methods=['PUT'])
 @require_admin
 def update_event(event_id):
-    event = events.get(event_id)
-    if not event:
+    # Check if event exists
+    response = events_table.get_item(Key={'event_id': event_id})
+    if 'Item' not in response:
         return jsonify({'error': 'Event not found'}), 404
 
     data = request.get_json()
+    event = Event.from_dict(response['Item'])
+
     # Update allowed fields
     for field in ['title', 'description', 'venue', 'date', 'total_seats',
-                  'event_image', 'venue_image']:
+                  'price', 'event_image', 'venue_image']:
         if field in data:
             setattr(event, field, data[field])
 
+    # Save updated event
+    event_dict = convert_to_decimal(event.to_dict())
+    events_table.put_item(Item=event_dict)
+
     return jsonify(event.to_dict()), 200
 
 
+# Admin Route: Deleting an event
 @app.route('/api/admin/events/<event_id>', methods=['DELETE'])
 @require_admin
 def delete_event(event_id):
-    event = events.get(event_id)
-    if not event:
+    # Check if event exists
+    response = events_table.get_item(Key={'event_id': event_id})
+    if 'Item' not in response:
         return jsonify({'error': 'Event not found'}), 404
 
-    del events[event_id]
+    events_table.delete_item(Key={'event_id': event_id})
     return jsonify({'message': 'Event deleted successfully'}), 200
 
 
-# User Routes
+# User Route: Getting all event
+@app.route('/api/events', methods=['GET'])
 @app.route('/api/events', methods=['GET'])
 @require_auth
 def get_all_events():
-    return jsonify([event.to_dict() for event in events.values()]), 200
+    response = events_table.scan()
+    events = [Event.from_dict(item).to_dict() for item in response['Items']]
+    return jsonify(events), 200
 
 
-# User get a single event
+# User Route: Getting a single event
 @app.route('/api/events/<event_id>', methods=['GET'])
 @require_auth
 def get_event(event_id):
-    event = events.get(event_id)
-    if not event:
+    response = events_table.get_item(Key={'event_id': event_id})
+    
+    if 'Item' not in response:
         return jsonify({'error': 'Event not found'}), 404
+
+    event = Event.from_dict(response['Item'])
     return jsonify(event.to_dict()), 200
 
 
-# User booking event route
+# User Route: Booking an event
 @app.route('/api/events/<event_id>/book', methods=['POST'])
 @require_auth
 def book_event(event_id):
-    event = events.get(event_id)
-    if not event:
+    # Get event
+    response = events_table.get_item(Key={'event_id': event_id})
+    if 'Item' not in response:
         return jsonify({'error': 'Event not found'}), 404
 
+    event = Event.from_dict(response['Item'])
+    
     data = request.get_json() or {}
     num_tickets = int(data.get('num_tickets', 1))
     user_id = data.get('user_id')
@@ -208,10 +288,17 @@ def book_event(event_id):
     # Deduct booked seats
     event.total_seats -= num_tickets
 
+    # Update event in DynamoDB
+    events_table.update_item(
+        Key={'event_id': event_id},
+        UpdateExpression='SET total_seats = :seats',
+        ExpressionAttributeValues={':seats': event.total_seats}
+    )
+
     # Create booking
-    booking = Booking(user_id=user_id, event_id=event_id,
-                      num_tickets=num_tickets)
-    bookings[booking.booking_id] = booking
+    booking = Booking(user_id=user_id, event_id=event_id, num_tickets=num_tickets)
+    booking_dict = convert_to_decimal(booking.to_dict())
+    bookings_table.put_item(Item=booking_dict)
 
     return jsonify({
         'message': 'Booking successful',
@@ -220,7 +307,7 @@ def book_event(event_id):
     }), 201
 
 
-# View user's booking
+# User Route: View their booking
 @app.route('/api/bookings', methods=['GET'])
 @require_auth
 def get_user_bookings():
@@ -228,28 +315,46 @@ def get_user_bookings():
     if not user_id:
         return jsonify({'error': 'Missing user_id'}), 400
 
-    user_bookings = [b.to_dict() for b in bookings.values()
-                     if b.user_id == user_id]
+    # Query bookings by user_id using GSI
+    response = bookings_table.query(
+        IndexName='UserIdIndex',
+        KeyConditionExpression=Key('user_id').eq(user_id)
+    )
+
+    user_bookings = [Booking.from_dict(item).to_dict() for item in response['Items']]
     return jsonify(user_bookings), 200
 
 
-# Show cancel user's booking
+# User Route: Cancel booking
 @app.route('/api/bookings/<booking_id>', methods=['DELETE'])
 @require_auth
 def cancel_booking(booking_id):
-    booking = bookings.get(booking_id)
-    if not booking:
+    # Get booking
+    response = bookings_table.get_item(Key={'booking_id': booking_id})
+    if 'Item' not in response:
         return jsonify({'error': 'Booking not found'}), 404
 
-    event = events.get(booking.event_id)
-    if not event:
+    booking = Booking.from_dict(response['Item'])
+
+    # Get associated event
+    event_response = events_table.get_item(Key={'event_id': booking.event_id})
+    if 'Item' not in event_response:
         return jsonify({'error': 'Associated event not found'}), 404
+
+    event = Event.from_dict(event_response['Item'])
 
     # Restore seats
     event.total_seats += booking.num_tickets
 
+    # Update event in DynamoDB
+    events_table.update_item(
+        Key={'event_id': booking.event_id},
+        UpdateExpression='SET total_seats = :seats',
+        ExpressionAttributeValues={':seats': event.total_seats}
+    )
+
     # Remove booking record
-    del bookings[booking_id]
+    bookings_table.delete_item(Key={'booking_id': booking_id})
 
     return jsonify({
         'message': 'Booking cancelled successfully',
@@ -259,34 +364,4 @@ def cancel_booking(booking_id):
 
 
 if __name__ == '__main__':
-    # Sample events for testing
-    sample1 = Event(
-        title='Summer Music Festival',
-        description='An amazing outdoor music festival featuring top artists',
-        venue='Central Park, Singapore',
-        date='2025-07-15T18:00:00Z',
-        total_seats=5000,
-        price=100,
-        event_image='data:image/png;base64,iVBORw0KGgo...',  # Placeholder
-        venue_image='data:image/png;base64,iVBORw0KGgo...',  # Placeholder
-        created_by='123e4567-e89b-12d3-a456-426614174000',
-        event_id='1'
-    )
-
-    sample2 = Event(
-        title='Tech Conference 2025',
-        description='Annual technology conference with industry leaders',
-        venue='Marina Bay Sands, Singapore',
-        date='2025-09-20T09:00:00Z',
-        total_seats=1000,
-        price=200,
-        event_image='data:image/png;base64,iVBORw0KGgo...',  # Placeholder
-        venue_image='data:image/png;base64,iVBORw0KGgo...',  # Placeholder
-        created_by='123e4567-e89b-12d3-a456-426614174000',
-        event_id='2'
-    )
-
-    events[sample1.event_id] = sample1
-    events[sample2.event_id] = sample2
-
     app.run(debug=True, host='0.0.0.0', port=5000)
