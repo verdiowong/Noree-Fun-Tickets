@@ -8,16 +8,13 @@ from twilio.rest import Client
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from datetime import datetime
-from dotenv import load_dotenv
-
-load_dotenv()
 
 app = Flask(__name__)
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-MAILJET_API_KEY = os.getenv("MAILJET_API_KEY")
-MAILJET_SECRET_KEY = os.getenv("MAILJET_SECRET_KEY")
-AWS_REGION = os.getenv("AWS_REGION")
+TWILIO_ACCOUNT_SID = os.environ.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.getenv("TWILIO_AUTH_TOKEN")
+MAILJET_API_KEY = os.environ.getenv("MAILJET_API_KEY")
+MAILJET_SECRET_KEY = os.environ.getenv("MAILJET_SECRET_KEY")
+AWS_REGION = os.environ.getenv("AWS_REGION")
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 table_notifications = dynamodb.Table("notifications")
 table_notification_reminders = dynamodb.Table("notificationS_reminder")
