@@ -1,0 +1,6 @@
+FROM python:3.12-slim
+WORKDIR /usr/src/app
+COPY ci/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY src/notifications.py .
+CMD ["python", "./notifications.py"]
