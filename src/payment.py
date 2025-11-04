@@ -60,10 +60,11 @@ def create_payment_intent():
         status = intent.status.upper()
         if status != "SUCCEEDED":
             # Store initial payment record in DynamoDB
+            amount_dollars = (Decimal(intent.amount) / Decimal(100))
             table.put_item(Item={
                 'payment_id': intent.id,
                 'booking_id': intent.metadata.get("booking_id", "unknown"),
-                'amount': Decimal(intent.amount / 100),  # Convert back to dollars
+                'amount': amount_dollars,
                 'currency': intent.currency.upper(),
                 'status': "pending",
                 'created_at': intent.created
@@ -193,4 +194,4 @@ def check_payment_status(id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5002)
