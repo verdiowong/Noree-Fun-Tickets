@@ -7,6 +7,9 @@ from typing import Optional
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
+import boto3
+from boto3.dynamodb.conditions import Key
+from decimal import Decimal
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -21,13 +24,60 @@ ACCESS_TTL_MIN = 60
 
 app = Flask(__name__)
 CORS(app)
+AWS_REGION = os.getenv("AWS_REGION")
+dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION) if AWS_REGION else None
+users_table = dynamodb.Table('Users') if dynamodb else None
 
 # -------------------------
-# In-memory "DB"
+# Persistence helpers (DynamoDB)
 # -------------------------
-USERS_BY_EMAIL: dict[str, User] = {}
-USERS_BY_ID: dict[str, User] = {}
-EVENTS: dict[str, Event] = {}
+def _user_to_item(u: User) -> dict:
+    return {
+        "user_id": u.user_id,
+        "name": u.name,
+        "email": u.email,
+        "role": u.role,
+        "password_hash": u.password_hash,
+        "created_at": u.created_at,
+    }
+
+def _item_to_user(item: dict) -> User:
+    return User(
+        user_id=item["user_id"],
+        name=item["name"],
+        email=item["email"],
+        role=item.get("role", "USER"),
+        password_hash=item.get("password_hash", ""),
+        created_at=item.get("created_at")
+    )
+
+def _get_user_by_id(uid: str) -> Optional[User]:
+    if not users_table:
+        return None
+    resp = users_table.get_item(Key={"user_id": uid})
+    item = resp.get("Item")
+    return _item_to_user(item) if item else None
+
+def _get_user_by_email(email: str) -> Optional[User]:
+    if not users_table:
+        return None
+    # Prefer a GSI on email; fallback to scan for demo
+    resp = users_table.scan(
+        FilterExpression=Key("email").eq(email)
+    )
+    items = resp.get("Items", [])
+    return _item_to_user(items[0]) if items else None
+
+def _put_user(u: User) -> None:
+    if not users_table:
+        return
+    users_table.put_item(Item=_user_to_item(u))
+
+def _delete_user(uid: str) -> bool:
+    if not users_table:
+        return False
+    users_table.delete_item(Key={"user_id": uid})
+    return True
 
 # -------------------------
 # Helpers: JWT + Auth
@@ -83,11 +133,17 @@ def require_admin(f):
 # -------------------------
 @app.route("/healthz", methods=["GET"])
 def healthz():
+    total_users = 0
+    if users_table:
+        try:
+            scan = users_table.scan(Select='COUNT')
+            total_users = scan.get('Count', 0)
+        except Exception:
+            total_users = -1
     return jsonify({
         "status": "ok",
         "service": "admin-user-service",
-        "users": len(USERS_BY_ID),
-        "events": len(EVENTS),
+        "users": total_users,
         "time": datetime.now(UTC).isoformat()
     }), 200
 
@@ -104,11 +160,19 @@ def register_user():
             return jsonify({"error": f"Missing field: {field}"}), 400
 
     email = data["email"].lower()
-    if email in USERS_BY_EMAIL:
+    if _get_user_by_email(email):
         return jsonify({"error": "Email already exists"}), 409
 
     # First user can be ADMIN for convenience (optional)
-    role = "ADMIN" if not USERS_BY_EMAIL else "USER"
+    # First user heuristic: if table empty, make ADMIN
+    role = "USER"
+    try:
+        if users_table:
+            cnt = users_table.scan(Select='COUNT').get('Count', 0)
+            if cnt == 0:
+                role = "ADMIN"
+    except Exception:
+        pass
     pwd_hash = generate_password_hash(data["password"])
 
     user = User.new(
@@ -118,8 +182,7 @@ def register_user():
         password_hash=pwd_hash
     )
 
-    USERS_BY_EMAIL[user.email] = user
-    USERS_BY_ID[user.user_id] = user
+    _put_user(user)
 
     public = user.to_public()
     return jsonify(public), 201
@@ -134,7 +197,7 @@ def login():
     data = request.get_json(force=True, silent=True) or {}
     email = (data.get("email") or "").lower()
     pwd = data.get("password")
-    u = USERS_BY_EMAIL.get(email)
+    u = _get_user_by_email(email)
     if not u or not check_password_hash(u.password_hash, pwd or ""):
         return jsonify({"error": "Invalid credentials"}), 401
 
@@ -150,7 +213,7 @@ def login():
 @require_auth
 def get_profile():
     uid = request.claims["sub"]
-    u = USERS_BY_ID.get(uid)
+    u = _get_user_by_id(uid)
     if not u:
         return jsonify({"error": "User not found"}), 404
     return jsonify(u.to_public()), 200
@@ -164,15 +227,18 @@ def get_profile():
 @require_auth
 def update_profile():
     uid = request.claims["sub"]
-    u = USERS_BY_ID.get(uid)
+    u = _get_user_by_id(uid)
     if not u:
         return jsonify({"error": "User not found"}), 404
 
     data = request.get_json(force=True, silent=True) or {}
+    changed = False
     if "name" in data and data["name"]:
-        u.name = data["name"]
+        u.name = data["name"]; changed = True
     if "password" in data and data["password"]:
-        u.password_hash = generate_password_hash(data["password"])
+        u.password_hash = generate_password_hash(data["password"]); changed = True
+    if changed:
+        _put_user(u)
     return jsonify({"message": "Profile updated"}), 200
 
 # -------------------------
@@ -183,7 +249,11 @@ def update_profile():
 @app.route("/api/admin/users", methods=["GET"])
 @require_admin
 def admin_list_users():
-    return jsonify([u.to_public() for u in USERS_BY_ID.values()]), 200
+    users = []
+    if users_table:
+        resp = users_table.scan()
+        users = [ _item_to_user(item).to_public() for item in resp.get('Items', []) ]
+    return jsonify(users), 200
 
 # -------------------------
 # ADMIN: delete user
@@ -193,10 +263,10 @@ def admin_list_users():
 @app.route("/api/admin/users/<user_id>", methods=["DELETE"])
 @require_admin
 def admin_delete_user(user_id):
-    u = USERS_BY_ID.pop(user_id, None)
+    u = _get_user_by_id(user_id)
     if not u:
         return jsonify({"error": "User not found"}), 404
-    USERS_BY_EMAIL.pop(u.email, None)
+    _delete_user(user_id)
     return jsonify({"message": "User deleted"}), 200
 
 
@@ -204,16 +274,21 @@ def admin_delete_user(user_id):
 # Seed for easy testing
 # -------------------------
 def _seed():
-    # first registered user becomes ADMIN, but we also pre-seed one here
+    if not users_table:
+        return
+    # Seed two users if table empty
+    try:
+        cnt = users_table.scan(Select='COUNT').get('Count', 0)
+        if cnt > 0:
+            return
+    except Exception:
+        return
     admin_pwd = generate_password_hash("adminpass")
     admin = User.new("Demo Admin", "admin@example.com", "ADMIN", admin_pwd)
-    USERS_BY_EMAIL[admin.email] = admin
-    USERS_BY_ID[admin.user_id] = admin
-
+    _put_user(admin)
     user_pwd = generate_password_hash("userpass")
     user = User.new("Demo User", "user@example.com", "USER", user_pwd)
-    USERS_BY_EMAIL[user.email] = user
-    USERS_BY_ID[user.user_id] = user
+    _put_user(user)
 
 if __name__ == "__main__":
     _seed()
