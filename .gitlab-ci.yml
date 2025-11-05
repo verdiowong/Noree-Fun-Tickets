@@ -61,7 +61,7 @@ deploy-ecs:
   stage: Deploy
   image: 'registry.gitlab.com/gitlab-org/cloud-deploy/aws-ecs:latest'
   environment:
-    name: production-ecs
+    name: g1t6-productions-ecs
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
   script:
