@@ -6,9 +6,9 @@ from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 
 
-AWS_REGION = os.environ.getenv("AWS_REGION")
+AWS_REGION = os.environ.get("AWS_REGION")
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
 table = dynamodb.Table('payments')
 
 app = Flask(__name__)
