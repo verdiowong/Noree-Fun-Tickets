@@ -32,27 +32,21 @@ pylint:
 
 release-image:
   stage: Release
-  image: docker:24-cli
+  image: docker:28.3.2
   services:
-    - docker:24-dind
+    - docker:28.3.2-dind
   before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
   script:
-    - docker build -t ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} .
-    - docker tag ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} ${IMAGE_NAME}:latest
-    - docker push ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}
-    - docker push ${IMAGE_NAME}:latest
-  only:
-    - main
-    - master
-  needs:
-    - flake8
-    - pylint
+    - docker build --pull -t "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:latest" -t "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHA" .
+    - docker push "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH" --all-tags
+
+
 deploy-ecs:
   stage: Deploy
   image: 'registry.gitlab.com/gitlab-org/cloud-deploy/aws-ecs:latest'
   environment:
-    name: g1t6-production.ecs
+    name: g1t6-productions-ecs
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
   script:
