@@ -62,4 +62,3 @@ deploy-ecs:
     - if: '$CI_COMMIT_REF_NAME == "main"'
   script:
     - ecs update-task-definition
-    
