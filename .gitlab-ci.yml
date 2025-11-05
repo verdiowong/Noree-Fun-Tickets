@@ -1,6 +1,7 @@
 stages:
   - Static Analysis
   - Release
+  - Deploy
 
 variables:
   DOCKER_DRIVER: overlay2
