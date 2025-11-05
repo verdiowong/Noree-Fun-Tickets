@@ -12,9 +12,10 @@ default:
     key: ${CI_PROJECT_NAME}-pip
     paths:
       - .cache/pip
-  variables:
-    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-    PYTHONDONTWRITEBYTECODE: "1"
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYTHONDONTWRITEBYTECODE: "1"
 
 flake8:
   stage: Static Analysis
