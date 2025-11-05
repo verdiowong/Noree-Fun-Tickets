@@ -11,6 +11,8 @@ dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
 table = dynamodb.Table('payments')
 
+print("Hello from Payment Service!")
+
 app = Flask(__name__)
 
 # Set your Stripe secret key
