@@ -1,5 +1,6 @@
 stages:
   - Static Analysis
+  - Release
 
 flake8:
   stage: Static Analysis
@@ -13,6 +14,7 @@ flake8:
     when: on_failure
     paths:
       - flake8_report.txt
+
 pylint:
   stage: Static Analysis
   image: python:3.13-slim
@@ -26,3 +28,30 @@ pylint:
     when: always
     paths:
       - pylint_report.txt
+
+release-image:
+  stage: Release
+  image: docker:24-cli
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: "/certs"
+    ECR_REGISTRY: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+    IMAGE_NAME: ticket-booking-service
+  before_script:
+    - apk add --no-cache python3 py3-pip
+    - pip3 install --break-system-packages awscli
+    - aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+  script:
+    - docker build -t ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} .
+    - docker tag ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} ${ECR_REGISTRY}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker tag ${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA} ${ECR_REGISTRY}/${IMAGE_NAME}:latest
+    - docker push ${ECR_REGISTRY}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}
+    - docker push ${ECR_REGISTRY}/${IMAGE_NAME}:latest
+  only:
+    - main
+    - master
+  needs:
+    - flake8
+    - pylint

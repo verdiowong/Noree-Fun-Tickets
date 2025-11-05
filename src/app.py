@@ -40,7 +40,7 @@ def convert_from_decimal(obj):
     return obj
 
 
-# Event class matching the database schema
+# Event class
 class Event:
     def __init__(self, title, description, venue, date, total_seats,
                  price, event_image=None, venue_image=None,
