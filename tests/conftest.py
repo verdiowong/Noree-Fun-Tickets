@@ -1,6 +1,7 @@
 import pytest
 from src.app import app as flask_app, USERS_BY_EMAIL, USERS_BY_ID, EVENTS
 
+
 @pytest.fixture(autouse=True)
 def clear_state():
     # Clear in-memory DB before each test
@@ -8,6 +9,7 @@ def clear_state():
     USERS_BY_ID.clear()
     EVENTS.clear()
     flask_app.config["TESTING"] = True
+
 
 @pytest.fixture
 def client():

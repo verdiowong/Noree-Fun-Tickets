@@ -4,6 +4,8 @@ from typing import Optional
 import uuid
 
 # ---------- Users ----------
+
+
 @dataclass
 class User:
     user_id: str
@@ -30,6 +32,7 @@ class User:
         d = asdict(self)
         d.pop("password_hash", None)
         return d
+
 
 # ---------- Events ----------
 @dataclass

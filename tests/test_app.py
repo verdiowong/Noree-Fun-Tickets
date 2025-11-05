@@ -13,13 +13,19 @@ def test_healthz(client):
 
 
 def test_register_and_login(client):
-    payload = {"name": "Test", "email": "test@gmail.com", "password": "password"}
+    payload = (
+        {"name": "Test", "email": "test@gmail.com", "password": "password"}
+    )
     r = client.post("/api/users/register", json=payload)
     assert r.status_code == 201
     reg = r.get_json()
     assert reg["email"] == "test@gmail.com"
 
-    r2 = client.post("/api/users/login", json={"email": "test@gmail.com", "password": "password"})
+    r2 = (
+        client.post("/api/users/login", json=(
+            {"email": "test@gmail.com", "password": "password"})
+        )
+    )
     assert r2.status_code == 200
     data = r2.get_json()
     assert "token" in data
@@ -28,13 +34,21 @@ def test_register_and_login(client):
 
 def test_register_missing_fields(client):
     # missing name
-    r = client.post("/api/users/register", json={"email": "a@b.com", "password": "x"})
+    r = (
+        client.post("/api/users/register", json=(
+            {"email": "a@b.com", "password": "x"})
+        )
+    )
     assert r.status_code == 400
     # missing email
     r = client.post("/api/users/register", json={"name": "A", "password": "x"})
     assert r.status_code == 400
     # missing password
-    r = client.post("/api/users/register", json={"name": "A", "email": "a@b.com"})
+    r = (
+        client.post("/api/users/register", json=(
+            {"name": "A", "email": "a@b.com"})
+        )
+    )
     assert r.status_code == 400
 
 
@@ -58,7 +72,9 @@ def test_login_invalid_credentials(client):
 
 def test_register_email_case_normalization(client):
     # register with uppercase email
-    client.post("/api/users/register", json={"name": "Case", "email": "UPPER@EX.COM", "password": "p"})
+    client.post("/api/users/register", json=(
+        {"name": "Case", "email": "UPPER@EX.COM", "password": "p"})
+    )
     # login with lowercase
     r = client.post("/api/users/login", json={"email": "upper@ex.com", "password": "p"})
     assert r.status_code == 200
@@ -91,14 +107,18 @@ def test_update_profile_change_name_and_password(client):
     headers = {"Authorization": f"Bearer {token}"}
 
     # update name and password
-    r2 = client.put("/api/users/profile", headers=headers, json={"name": "Updated", "password": "newpass"})
+    r2 = (
+        client.put("/api/users/profile", headers=headers, json={"name": "Updated", "password": "newpass"})
+    )
     assert r2.status_code == 200
 
     # old password should fail
     r_old = client.post("/api/users/login", json={"email": "up@example.com", "password": "old"})
     assert r_old.status_code == 401
     # new password works
-    r_new = client.post("/api/users/login", json={"email": "up@example.com", "password": "newpass"})
+    r_new = (
+        client.post("/api/users/login", json={"email": "up@example.com", "password": "newpass"})
+    )
     assert r_new.status_code == 200
 
 

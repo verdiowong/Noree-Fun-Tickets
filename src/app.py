@@ -1,7 +1,6 @@
 import os
-import time
 import jwt
-from models import User, Event
+from models import User
 from datetime import datetime, UTC, timedelta
 from typing import Optional
 from flask import Flask, request, jsonify
@@ -9,12 +8,8 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import boto3
 from boto3.dynamodb.conditions import Key
-from decimal import Decimal
 from dotenv import load_dotenv
 load_dotenv()
-
-
-
 # -------------------------
 # Config
 # -------------------------
@@ -25,12 +20,17 @@ ACCESS_TTL_MIN = 60
 app = Flask(__name__)
 CORS(app)
 AWS_REGION = os.getenv("AWS_REGION")
-dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION) if AWS_REGION else None
+dynamodb = (
+    boto3.resource('dynamodb', region_name=AWS_REGION) if AWS_REGION else None
+)
 users_table = dynamodb.Table('Users') if dynamodb else None
 
 # -------------------------
 # Persistence helpers (DynamoDB)
+
 # -------------------------
+
+
 def _user_to_item(u: User) -> dict:
     return {
         "user_id": u.user_id,
@@ -40,6 +40,7 @@ def _user_to_item(u: User) -> dict:
         "password_hash": u.password_hash,
         "created_at": u.created_at,
     }
+
 
 def _item_to_user(item: dict) -> User:
     return User(
@@ -51,12 +52,14 @@ def _item_to_user(item: dict) -> User:
         created_at=item.get("created_at")
     )
 
+
 def _get_user_by_id(uid: str) -> Optional[User]:
     if not users_table:
         return None
     resp = users_table.get_item(Key={"user_id": uid})
     item = resp.get("Item")
     return _item_to_user(item) if item else None
+
 
 def _get_user_by_email(email: str) -> Optional[User]:
     if not users_table:
@@ -68,16 +71,19 @@ def _get_user_by_email(email: str) -> Optional[User]:
     items = resp.get("Items", [])
     return _item_to_user(items[0]) if items else None
 
+
 def _put_user(u: User) -> None:
     if not users_table:
         return
     users_table.put_item(Item=_user_to_item(u))
+
 
 def _delete_user(uid: str) -> bool:
     if not users_table:
         return False
     users_table.delete_item(Key={"user_id": uid})
     return True
+
 
 # -------------------------
 # Helpers: JWT + Auth
@@ -91,8 +97,10 @@ def make_jwt(user: User) -> str:
         "role": user.role,      # 'ADMIN' or 'USER'
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=ACCESS_TTL_MIN)).timestamp()),
+
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+
 
 def decode_jwt_from_header() -> Optional[dict]:
     """Return decoded claims or None."""
@@ -102,19 +110,25 @@ def decode_jwt_from_header() -> Optional[dict]:
     token = auth.split(" ", 1)[1].strip()
     try:
         claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+
         return claims
     except Exception:
+
         return None
+
 
 def require_auth(f):
     def wrapper(*args, **kwargs):
         claims = decode_jwt_from_header()
         if not claims:
             return jsonify({"error": "Unauthorized"}), 401
+
         request.claims = claims  # attach to request context
         return f(*args, **kwargs)
+
     wrapper.__name__ = f.__name__
     return wrapper
+
 
 def require_admin(f):
     def wrapper(*args, **kwargs):
@@ -125,8 +139,10 @@ def require_admin(f):
             return jsonify({"error": "Forbidden"}), 403
         request.claims = claims
         return f(*args, **kwargs)
+
     wrapper.__name__ = f.__name__
     return wrapper
+
 
 # -------------------------
 # Health
@@ -145,7 +161,9 @@ def healthz():
         "service": "admin-user-service",
         "users": total_users,
         "time": datetime.now(UTC).isoformat()
+
     }), 200
+
 
 # -------------------------
 # API: Register new user
@@ -187,6 +205,7 @@ def register_user():
     public = user.to_public()
     return jsonify(public), 201
 
+
 # -------------------------
 # API: Authenticate user (JWT)
 # POST /api/users/login {email, password}
@@ -202,27 +221,38 @@ def login():
         return jsonify({"error": "Invalid credentials"}), 401
 
     token = make_jwt(u)
+
     return jsonify({"token": token, "user_id": u.user_id, "role": u.role}), 200
 
 # -------------------------
 # API: Get user profile
 # GET /api/users/profile   (Bearer <token>)
+
 # -> {user_id, name, email, role, created_at}
 # -------------------------
+
+
 @app.route("/api/users/profile", methods=["GET"])
+
+
 @require_auth
 def get_profile():
     uid = request.claims["sub"]
+
     u = _get_user_by_id(uid)
     if not u:
+
         return jsonify({"error": "User not found"}), 404
     return jsonify(u.to_public()), 200
 
 # -------------------------
 # API: Update profile
+
 # PUT /api/users/profile  {name?, password?}
 # -> {message: "Profile updated"}
 # -------------------------
+
+
 @app.route("/api/users/profile", methods=["PUT"])
 @require_auth
 def update_profile():
@@ -235,25 +265,33 @@ def update_profile():
     changed = False
     if "name" in data and data["name"]:
         u.name = data["name"]; changed = True
+
     if "password" in data and data["password"]:
         u.password_hash = generate_password_hash(data["password"]); changed = True
+
     if changed:
         _put_user(u)
     return jsonify({"message": "Profile updated"}), 200
 
 # -------------------------
+
 # ADMIN: view all users
 # GET /api/admin/users   (Admin token)
 # -> [{user_id, name, email, role}]
+
+
 # -------------------------
 @app.route("/api/admin/users", methods=["GET"])
 @require_admin
+
 def admin_list_users():
     users = []
+
     if users_table:
         resp = users_table.scan()
         users = [ _item_to_user(item).to_public() for item in resp.get('Items', []) ]
     return jsonify(users), 200
+
 
 # -------------------------
 # ADMIN: delete user
