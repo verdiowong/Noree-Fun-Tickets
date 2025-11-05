@@ -143,6 +143,11 @@ def require_auth(f):
     return wrapper
 
 
+@app.route('/health')
+def health():
+    return {"status": "ok"}, 200
+
+
 # Admin Routes
 @app.route('/api/admin/events', methods=['POST'])
 @require_admin
