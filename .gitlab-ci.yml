@@ -51,7 +51,7 @@ unit_tests:
     - changes:
         - services/admin/**
       when: on_success
-    - when: manual
+    - when: always
   script:
     - pip install pytest
     - export PYTHONPATH=services/admin:services/admin/src:.
