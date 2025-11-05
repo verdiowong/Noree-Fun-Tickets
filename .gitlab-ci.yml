@@ -3,11 +3,6 @@ stages:
   - Release
   - Deploy
 
-variables:
-  DOCKER_DRIVER: overlay2
-  IMAGE_NAME: $CI_REGISTRY_IMAGE/ticket-booking-service
-  DOCKER_TLS_CERTDIR: "/certs"
-
 flake8:
   stage: Static Analysis
   image: python:3.13-slim
