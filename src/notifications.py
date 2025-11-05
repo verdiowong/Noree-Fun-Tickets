@@ -10,11 +10,11 @@ from boto3.dynamodb.conditions import Key
 from datetime import datetime
 
 app = Flask(__name__)
-TWILIO_ACCOUNT_SID = os.environ.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.environ.getenv("TWILIO_AUTH_TOKEN")
-MAILJET_API_KEY = os.environ.getenv("MAILJET_API_KEY")
-MAILJET_SECRET_KEY = os.environ.getenv("MAILJET_SECRET_KEY")
-AWS_REGION = os.environ.getenv("AWS_REGION")
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+MAILJET_API_KEY = os.environ.get("MAILJET_API_KEY")
+MAILJET_SECRET_KEY = os.environ.get("MAILJET_SECRET_KEY")
+AWS_REGION = os.environ.get("AWS_REGION")
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 table_notifications = dynamodb.Table("notifications")
 table_notification_reminders = dynamodb.Table("notificationS_reminder")
@@ -177,4 +177,4 @@ def set_reminder():
     return jsonify(response), 200
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5004)
