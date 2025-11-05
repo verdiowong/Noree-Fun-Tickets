@@ -44,6 +44,7 @@ stages:
 #     - docker compose -f ci/compose.test.yaml up --exit-code-from games-pytest
 
 
+
 release-image:
   stage: Release
   image: docker:28.3.2
