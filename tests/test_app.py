@@ -62,11 +62,21 @@ def test_register_duplicate_email(client):
 
 def test_login_invalid_credentials(client):
     # no such user
-    r = client.post("/api/users/login", json={"email": "noone@example.com", "password": "x"})
+    r = (
+        client.post("/api/users/login", json=(
+            {"email": "noone@example.com", "password": "x"})
+        )
+    )
     assert r.status_code == 401
     # register then wrong password
-    client.post("/api/users/register", json={"name": "X", "email": "x@example.com", "password": "right"})
-    r = client.post("/api/users/login", json={"email": "x@example.com", "password": "wrong"})
+    client.post("/api/users/register", json=(
+        {"name": "X", "email": "x@example.com", "password": "right"})
+    )
+    r = (
+        client.post("/api/users/login", json=(
+            {"email": "x@example.com", "password": "wrong"})
+        )
+    )
     assert r.status_code == 401
 
 
@@ -76,7 +86,11 @@ def test_register_email_case_normalization(client):
         {"name": "Case", "email": "UPPER@EX.COM", "password": "p"})
     )
     # login with lowercase
-    r = client.post("/api/users/login", json={"email": "upper@ex.com", "password": "p"})
+    r = (
+        client.post("/api/users/login", json=(
+            {"email": "upper@ex.com", "password": "p"})
+        )
+    )
     assert r.status_code == 200
 
 
@@ -101,14 +115,21 @@ def test_get_profile_with_token(client):
 
 def test_update_profile_change_name_and_password(client):
     # register and login
-    client.post("/api/users/register", json={"name": "Up", "email": "up@example.com", "password": "old"})
-    r = client.post("/api/users/login", json={"email": "up@example.com", "password": "old"})
+    client.post("/api/users/register", json=(
+        {"name": "Up", "email": "up@example.com", "password": "old"})
+    )
+    r = (
+        client.post("/api/users/login", json=(
+            {"email": "up@example.com", "password": "old"})
+        )
+    )
     token = r.get_json()["token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     # update name and password
     r2 = (
-        client.put("/api/users/profile", headers=headers, json={"name": "Updated", "password": "newpass"})
+        client.put("/api/users/profile", headers=(
+            headers), json={"name": "Updated", "password": "newpass"})
     )
     assert r2.status_code == 200
 
@@ -145,7 +166,7 @@ def test_profile_with_malformed_or_invalid_token(client):
 
 def test_admin_endpoints_and_errors(client):
     # delete without auth -> 401
-    r = client.delete(f"/api/admin/users/some-id")
+    r = client.delete("/api/admin/users/some-id")
     assert r.status_code == 401
 
     # non-admin cannot access admin list

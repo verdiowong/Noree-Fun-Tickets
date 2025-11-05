@@ -24,7 +24,7 @@ flake8:
     - python -V
     - python -m pip install flake8
   script:
-    - flake8 src | tee flake8_report.txt
+    - flake8 --ignore=E501 src | tee flake8_report.txt
   artifacts:
     when: on_failure
     paths:

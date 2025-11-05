@@ -233,8 +233,6 @@ def login():
 
 
 @app.route("/api/users/profile", methods=["GET"])
-
-
 @require_auth
 def get_profile():
     uid = request.claims["sub"]
@@ -264,10 +262,12 @@ def update_profile():
     data = request.get_json(force=True, silent=True) or {}
     changed = False
     if "name" in data and data["name"]:
-        u.name = data["name"]; changed = True
+        u.name = data["name"]
+        changed = True
 
     if "password" in data and data["password"]:
-        u.password_hash = generate_password_hash(data["password"]); changed = True
+        u.password_hash = generate_password_hash(data["password"])
+        changed = True
 
     if changed:
         _put_user(u)
@@ -283,13 +283,14 @@ def update_profile():
 # -------------------------
 @app.route("/api/admin/users", methods=["GET"])
 @require_admin
-
 def admin_list_users():
     users = []
 
     if users_table:
         resp = users_table.scan()
-        users = [ _item_to_user(item).to_public() for item in resp.get('Items', []) ]
+        users = (
+            [_item_to_user(item).to_public() for item in resp.get('Items', [])]
+        )
     return jsonify(users), 200
 
 
@@ -327,6 +328,7 @@ def _seed():
     user_pwd = generate_password_hash("userpass")
     user = User.new("Demo User", "user@example.com", "USER", user_pwd)
     _put_user(user)
+
 
 if __name__ == "__main__":
     _seed()
