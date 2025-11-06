@@ -2,7 +2,7 @@ stages:
 #   - Static Analysis
 #   - Test
   - Release
-#   - Deploy
+  - Deploy
 
 # flake8:
 #   stage: Static Analysis
