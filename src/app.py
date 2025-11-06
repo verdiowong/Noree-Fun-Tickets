@@ -13,7 +13,7 @@ _verifier = build_verifier_from_env()
 @app.get("/healthz")
 def healthz():
     """Liveness/health endpoint so clients can verify the service is up."""
-    print("Health check OK")
+    print("Health check OK!!!")
     return jsonify({
         "status": "ok",
         "service": "booking-coordinator"
