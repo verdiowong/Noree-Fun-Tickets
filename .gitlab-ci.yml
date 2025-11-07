@@ -1,4 +1,5 @@
 stages:
+  - Security-Secrets
   - Static Analysis
   - test
   - release
@@ -17,6 +18,22 @@ default:
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   PYTHONDONTWRITEBYTECODE: "1"
+
+gitleaks:
+  stage: Security-Secrets
+  image: zricethezav/gitleaks:latest
+  script:
+    - gitleaks detect --source . --no-banner --report-format json --report-path gitleaks.json
+  artifacts:
+    when: always
+    paths:
+      - gitleaks.json
+  allow_failure: false
+  rules:
+    - changes:
+        - services/admin/**
+      when: on_success
+    - when: on_success
 
 flake8:
   stage: Static Analysis
