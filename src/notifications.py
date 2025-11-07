@@ -28,6 +28,12 @@ def send_notification(notification_type, data):
     print(f"[{notification_type.upper()}] Notification sent to user {data.get('user_id')}")
     return {"notification_id": notification_id, "status": status}
 
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "Notification service is healthy"}), 200
+
+
 # --- 1. Send confirmation email ---
 @app.route("/api/notifications/email", methods=["POST"])
 def send_email():
