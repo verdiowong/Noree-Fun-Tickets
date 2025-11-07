@@ -57,6 +57,25 @@ pip-audit:
         - services/admin/**
       when: on_success
     - when: on_success
+  
+bandit:
+  stage: Security-SAST
+  image: python:3.11-slim
+  before_script:
+    - python -m pip install --upgrade pip
+    - python -m pip install bandit
+  script:
+    - bandit -r services/admin/src -f json -o bandit.json || true
+  artifacts:
+    when: always
+    paths:
+      - bandit.json
+  allow_failure: true      # flip to false once findings are clean
+  rules:
+    - changes:
+        - services/admin/**
+      when: on_success
+    - when: on_success
 
 flake8:
   stage: Static Analysis
