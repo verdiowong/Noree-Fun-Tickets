@@ -8,6 +8,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Set work directory
 WORKDIR /app
 
+# Install curl (required for ECS health checks)
+RUN apt-get update && apt-get install -y curl
+
 # Install pip dependencies
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
