@@ -40,6 +40,11 @@ def get_payment_intent_id(booking_id):
         return None
 
 
+@app.route("/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "Payment service is healthy"}), 200
+
+
 # --- 1. Create Stripe payment intent ---
 @app.route("/api/payments/create-intent", methods=["POST"])
 def create_payment_intent():
