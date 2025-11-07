@@ -176,5 +176,17 @@ def set_reminder():
     response = send_notification("reminder", data)
     return jsonify(response), 200
 
+
+@app.get("/health")
+def healthz():
+    """Liveness/health endpoint so clients can verify the service is up."""
+    print("Health check from Notification Service!")
+    return jsonify({
+        "status": "ok",
+        "service": "notification"
+    }), 200
+
+
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=8082)
