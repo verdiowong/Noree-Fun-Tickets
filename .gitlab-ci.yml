@@ -82,6 +82,7 @@ deploy-ecs:
     name: g1t6-productions-ecs
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
+  before_script: []
   script:
     - ecs update-task-definition
 
