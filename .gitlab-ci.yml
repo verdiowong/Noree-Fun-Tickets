@@ -1,5 +1,6 @@
 stages:
   - Security-Secrets
+  - Security-SCA
   - Static Analysis
   - test
   - release
@@ -19,21 +20,40 @@ variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   PYTHONDONTWRITEBYTECODE: "1"
 
-gitleaks:
-  stage: Security-Secrets
-  image: zricethezav/gitleaks:latest
+  gitleaks:
+    stage: Security-Secrets
+    image: zricethezav/gitleaks:latest
+    script:
+      - gitleaks detect --source . --no-banner --report-format json --report-path gitleaks.json
+    artifacts:
+      when: always
+      paths:
+        - gitleaks.json
+    allow_failure: false
+    rules:
+      - changes:
+          - services/admin/**
+        when: on_success
+      - when: on_success
+
+  pip-audit:
+  stage: Security-SCA
+  image: python:3.11-slim
+  before_script:
+    - pip install --no-cache-dir pip-audit
+    - pip install --no-cache-dir -r services/admin/requirements.txt || pip install --no-cache-dir -r requirements.txt
   script:
-    - gitleaks detect --source . --no-banner --report-format json --report-path gitleaks.json
+    - pip-audit -r services/admin/requirements.txt -f json -o pip-audit.json || pip-audit -r requirements.txt -f json -o pip-audit.json || true
   artifacts:
     when: always
     paths:
-      - gitleaks.json
-  allow_failure: false
+      - pip-audit.json
+  allow_failure: true
   rules:
     - changes:
         - services/admin/**
       when: on_success
-    - when: on_success
+    - when: manual
 
 flake8:
   stage: Static Analysis
