@@ -86,7 +86,7 @@ trivy-config:
     entrypoint: [""]
   before_script: []
   script:
-    - trivy config --format json --output trivy-config.json services/admin
+    - trivy config --format json --output trivy-config.json .
   artifacts:
     when: always
     paths: [trivy-config.json]
