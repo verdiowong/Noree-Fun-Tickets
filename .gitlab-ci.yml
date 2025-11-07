@@ -25,6 +25,7 @@ gitleaks:
   image: 
     name: "zricethezav/gitleaks"
     entrypoint: [""]
+  before_script: []
   script:
     - gitleaks detect --source . --no-banner --report-format json --report-path gitleaks.json
   artifacts:
