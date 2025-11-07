@@ -8,18 +8,17 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import boto3
 from boto3.dynamodb.conditions import Key
-from dotenv import load_dotenv
-load_dotenv()
+
 # -------------------------
 # Config
 # -------------------------
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
+JWT_SECRET = os.environ.get("JWT_SECRET")
 JWT_ALG = "HS256"
 ACCESS_TTL_MIN = 60
 
 app = Flask(__name__)
 CORS(app)
-AWS_REGION = os.getenv("AWS_REGION")
+AWS_REGION = os.environ.get("AWS_REGION")
 dynamodb = (
     boto3.resource('dynamodb', region_name=AWS_REGION) if AWS_REGION else None
 )
@@ -332,5 +331,4 @@ def _seed():
 
 if __name__ == "__main__":
     _seed()
-    port = int(os.getenv("PORT", "5001"))
-    app.run(debug=True, host="0.0.0.0", port=port)
+    app.run(debug=True, host="0.0.0.0", 8081)
