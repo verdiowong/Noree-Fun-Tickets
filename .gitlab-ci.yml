@@ -85,4 +85,21 @@ deploy-ecs:
   before_script: []
   script:
     - ecs update-task-definition
+    - echo "=== DEBUG: describe service ==="
+    - aws ecs describe-services --cluster "$CI_AWS_ECS_CLUSTER" --services "$CI_AWS_ECS_SERVICE" --region "$AWS_DEFAULT_REGION" --output json || true
+    - echo "=== DEBUG: service events ==="
+    - aws ecs describe-services --cluster "$CI_AWS_ECS_CLUSTER" --services "$CI_AWS_ECS_SERVICE" --region "$AWS_DEFAULT_REGION" --query 'services[0].events' --output json || true
+    - echo "=== DEBUG: task definition referenced by service ==="
+    - TASK_DEF=$(aws ecs describe-services --cluster "$CI_AWS_ECS_CLUSTER" --services "$CI_AWS_ECS_SERVICE" --region "$AWS_DEFAULT_REGION" --query 'services[0].taskDefinition' --output text) || true
+    - echo "taskDefinition: $TASK_DEF"
+    - echo "=== DEBUG: log group from task definition ==="
+    - LOG_GROUP=$(aws ecs describe-task-definition --task-definition "$TASK_DEF" --region "$AWS_DEFAULT_REGION" --query 'taskDefinition.containerDefinitions[0].logConfiguration.options.awslogs-group' --output text) || true
+    - echo "log group: $LOG_GROUP"
+    - echo "=== DEBUG: stopped tasks for service ==="
+    - TASKS_STOPPED=$(aws ecs list-tasks --cluster "$CI_AWS_ECS_CLUSTER" --service-name "$CI_AWS_ECS_SERVICE" --desired-status STOPPED --region "$AWS_DEFAULT_REGION" --query 'taskArns[]' --output text) || true
+    - echo "stopped tasks: $TASKS_STOPPED"
+    - if [ -n "$TASKS_STOPPED" ]; then aws ecs describe-tasks --cluster "$CI_AWS_ECS_CLUSTER" --tasks $TASKS_STOPPED --region "$AWS_DEFAULT_REGION" --output json || true; for t in $TASKS_STOPPED; do ID=$(basename $t); echo "=== DEBUG: logs for task $ID ==="; if [ "$LOG_GROUP" != "None" ]; then aws logs filter-log-events --log-group-name "$LOG_GROUP" --filter-pattern "$ID" --limit 200 --region "$AWS_DEFAULT_REGION" || true; fi; done; fi
+    - echo "=== DEBUG: pending & running tasks ==="
+    - aws ecs list-tasks --cluster "$CI_AWS_ECS_CLUSTER" --service-name "$CI_AWS_ECS_SERVICE" --desired-status PENDING --region "$AWS_DEFAULT_REGION" --output json || true
+    - aws ecs list-tasks --cluster "$CI_AWS_ECS_CLUSTER" --service-name "$CI_AWS_ECS_SERVICE" --desired-status RUNNING --region "$AWS_DEFAULT_REGION" --output json || true
 
