@@ -72,7 +72,7 @@ bandit:
     when: always
     paths:
       - bandit.json
-  allow_failure: true
+  allow_failure: false
   rules:
     - changes:
         - services/admin/**
@@ -106,7 +106,7 @@ trivy-image:
     - apk add --no-cache curl
     - curl -sSL https://github.com/aquasecurity/trivy/releases/download/v0.53.0/trivy_0.53.0_Linux-64bit.tar.gz | tar xz -C /usr/local/bin trivy
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
-    - docker build --pull -t "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHA" -f services/admin/Dockerfile services/admin
+    - docker build --pull -t "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHA" -f
   script:
     - trivy image --severity HIGH,CRITICAL --format json --output trivy-image.json "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHA" || true
   artifacts:
