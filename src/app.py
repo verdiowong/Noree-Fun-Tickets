@@ -307,6 +307,14 @@ def admin_delete_user(user_id):
     _delete_user(user_id)
     return jsonify({"message": "User deleted"}), 200
 
+@app.get("/health")
+def healthz():
+    """Liveness/health endpoint so clients can verify the service is up."""
+    print("Health check from Payment Service!")
+    return jsonify({
+        "status": "ok",
+        "service": "payment"
+    }), 200
 
 # -------------------------
 # Seed for easy testing
