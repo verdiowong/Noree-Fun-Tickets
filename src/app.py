@@ -381,5 +381,15 @@ def cancel_booking(booking_id):
     }), 200
 
 
+@app.get("/health")
+def health():
+    """Liveness/health endpoint so clients can verify the service is up."""
+    return jsonify({
+        "status": "ok",
+        "service": "ticket-booking"
+    }), 200
+
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8084)
