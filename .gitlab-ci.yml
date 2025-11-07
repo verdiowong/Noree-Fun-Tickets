@@ -22,7 +22,9 @@ variables:
 
 gitleaks:
   stage: Security-Secrets
-  image: zricethezav/gitleaks:latest
+  image: 
+    name: "zricethezav/gitleaks"
+    entrypoint: [""]
   script:
     - gitleaks detect --source . --no-banner --report-format json --report-path gitleaks.json
   artifacts:
@@ -53,7 +55,7 @@ pip-audit:
     - changes:
         - services/admin/**
       when: on_success
-    - when: manual
+    - when: on_success
 
 flake8:
   stage: Static Analysis
