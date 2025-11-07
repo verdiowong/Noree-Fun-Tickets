@@ -243,6 +243,12 @@ def proxy_to_service():
             "message": f"Unknown service: {service}"
         }), 400
 
+    print("service called:", service)
+    print("endpoint called:", endpoint)
+    print("method called:", method)
+    print("url called:", f"{base}")
+    print("target_url called:", f"{base}{endpoint}")
+
     if not endpoint.startswith("/"):
         endpoint = "/" + endpoint
 
