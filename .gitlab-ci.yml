@@ -81,7 +81,9 @@ bandit:
 
 trivy-config:
   stage: Security-Container
-  image: aquasec/trivy:0.53.0
+  image:
+    name: "aquasec/trivy:0.53.0"
+    entrypoint: [""]
   before_script: []
   script:
     - trivy config --format json --output trivy-config.json services/admin
