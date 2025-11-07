@@ -15,11 +15,6 @@ print("Hello from Payment Service!")
 
 app = Flask(__name__)
 
-# Set your Stripe secret key
-# In production, you’d store this securely in environment variables
-
-
-
 # ---- Helper: replace this with your real DB lookup if you persist mapping ----
 def get_payment_intent_id(booking_id):
     try:
@@ -192,7 +187,16 @@ def check_payment_status(id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 404
+    
 
+@app.get("/health")
+def healthz():
+    """Liveness/health endpoint so clients can verify the service is up."""
+    print("Health check from Payment Service!")
+    return jsonify({
+        "status": "ok",
+        "service": "payment"
+    }), 200
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=8083)
