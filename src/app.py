@@ -1,6 +1,4 @@
 import os
-import jwt
-from models import User
 from datetime import datetime, UTC, timedelta
 from typing import Optional
 from flask import Flask, request, jsonify
@@ -8,6 +6,8 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import boto3
 from boto3.dynamodb.conditions import Key
+import jwt
+from .models import User
 
 # -------------------------
 # Config
