@@ -1,6 +1,7 @@
 stages:
   - Security-Secrets
   - Security-SCA
+  - Security-SAST
   - Static Analysis
   - test
   - release
