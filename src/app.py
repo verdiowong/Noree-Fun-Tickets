@@ -17,7 +17,7 @@ CORS(app)
 def get_dynamodb_resource():
     """Get DynamoDB resource based on environment"""
     endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
-    
+
     if endpoint_url:
         # Use local DynamoDB (for testing)
         return boto3.resource(
