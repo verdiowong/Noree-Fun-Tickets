@@ -1,5 +1,6 @@
 stages:
   - Static Analysis
+  - Test
   - Release
   - Deploy
 
@@ -30,6 +31,18 @@ pylint:
     paths:
       - pylint_report.txt
 
+integration-tests:
+  stage: Test
+  image: docker:28.3.2
+  services:
+    - docker:28.3.2-dind
+  before_script:
+    - docker info
+  script:
+    - docker compose -f ci/compose.test.yaml up --exit-code-from ticket-booking-pytest
+  after_script:
+    - docker compose -f ci/compose.test.yaml down
+
 release-image:
   stage: Release
   image: docker:28.3.2
@@ -40,6 +53,8 @@ release-image:
   script:
     - docker build --pull -t "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:latest" -t "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH:$CI_COMMIT_SHA" .
     - docker push "$CI_REGISTRY_IMAGE/$CI_COMMIT_BRANCH" --all-tags
+  needs:
+    - integration-tests
 
 
 deploy-ecs:
@@ -49,5 +64,7 @@ deploy-ecs:
     name: g1t6-productions-ecs
   rules:
     - if: '$CI_COMMIT_REF_NAME == "main"'
+  needs:
+    - release-image
   script:
     - ecs update-task-definition

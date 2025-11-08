@@ -5,6 +5,7 @@ import uuid
 import boto3
 from boto3.dynamodb.conditions import Key
 from decimal import Decimal
+import os
 
 
 app = Flask(__name__)
@@ -12,8 +13,26 @@ CORS(app)
 
 
 # Initialise DynamoDB
-dynamodb = boto3.resource('dynamodb',
-                          region_name='ap-southeast-1')  # Singapore region
+# DynamoDB configuration - supports both local and AWS
+def get_dynamodb_resource():
+    """Get DynamoDB resource based on environment"""
+    endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
+    
+    if endpoint_url:
+        # Use local DynamoDB (for testing)
+        return boto3.resource(
+            'dynamodb',
+            endpoint_url=endpoint_url,
+            region_name='ap-southeast-1',
+            aws_access_key_id='dummy',
+            aws_secret_access_key='dummy'
+        )
+    else:
+        # Use AWS DynamoDB (production)
+        return boto3.resource('dynamodb', region_name='ap-southeast-1')
+
+
+dynamodb = get_dynamodb_resource()
 events_table = dynamodb.Table('Events')
 bookings_table = dynamodb.Table('Bookings')
 
