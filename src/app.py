@@ -164,7 +164,7 @@ def require_auth(f):
 
 # Admin Routes
 @app.route('/api/admin/events', methods=['POST'])
-@require_admin
+# @require_admin
 def create_event():
     data = request.get_json()
 
@@ -195,7 +195,7 @@ def create_event():
 
 
 @app.route('/api/admin/events/<event_id>', methods=['GET'])
-@require_admin
+# @require_admin
 def get_event_admin(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
@@ -210,7 +210,7 @@ def get_event_admin(event_id):
 
 
 @app.route('/api/admin/events', methods=['GET'])
-@require_admin
+# @require_admin
 def get_all_events_admin():
     response = events_table.scan()
     events = [Event.from_dict(item).to_dict() for item in response['Items']]
@@ -218,7 +218,7 @@ def get_all_events_admin():
 
 
 @app.route('/api/admin/events/<event_id>', methods=['PUT'])
-@require_admin
+# @require_admin
 def update_event(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
@@ -245,7 +245,7 @@ def update_event(event_id):
 
 
 @app.route('/api/admin/events/<event_id>', methods=['DELETE'])
-@require_admin
+# @require_admin
 def delete_event(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
@@ -261,7 +261,7 @@ def delete_event(event_id):
 
 # User Routes
 @app.route('/api/events', methods=['GET'])
-@require_auth
+# @require_auth
 def get_all_events():
     response = events_table.scan()
     events = [Event.from_dict(item).to_dict() for item in response['Items']]
@@ -269,7 +269,7 @@ def get_all_events():
 
 
 @app.route('/api/events/<event_id>', methods=['GET'])
-@require_auth
+# @require_auth
 def get_event(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
@@ -284,7 +284,7 @@ def get_event(event_id):
 
 
 @app.route('/api/events/<event_id>/book', methods=['POST'])
-@require_auth
+# @require_auth
 def book_event(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
@@ -334,7 +334,7 @@ def book_event(event_id):
 
 
 @app.route('/api/bookings', methods=['GET'])
-@require_auth
+# @require_auth
 def get_user_bookings():
     user_id = request.args.get('user_id')
     if not user_id:
@@ -355,7 +355,7 @@ def get_user_bookings():
 
 
 @app.route('/api/bookings/<booking_id>', methods=['DELETE'])
-@require_auth
+# @require_auth
 def cancel_booking(booking_id):
     # Ensure booking_id is string
     booking_id = str(booking_id)
