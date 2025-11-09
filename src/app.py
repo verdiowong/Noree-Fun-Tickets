@@ -323,7 +323,7 @@ def book_event(event_id):
         return jsonify({"error": "Missing user_id"}), 400
     if num_tickets <= 0:
         return jsonify({"error": "Invalid ticket quantity"}), 400
-    
+
     # Validate seat_numbers is a list
     if not isinstance(seat_numbers, list):
         return jsonify({"error": "seat_numbers must be a list"}), 400
