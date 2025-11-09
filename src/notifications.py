@@ -202,59 +202,32 @@ def set_reminder():
     return jsonify(response), 200
 
 
-@app.route("/api/notifications/setreminder/<reminder_id>", methods=["PUT"])
+@app.route("/api/notifications/setreminder/<reminder_id>", methods=["PATCH"])
 def update_reminder(reminder_id):
     data = request.get_json()
-    required_fields = [
-        "user_id",
-        "notification_id",
-        "booking_id",
-        "event_id",
-        "seats_id",
-        "notification_type",
-        "message",
-        "status",
-        "reminder_time",
-        "created_at",
-        "hide"
-    ]
+    update_expression = "SET "
+    expression_attribute_values = {}
+    first = True
 
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
+    for key, value in data.items():
+        if not first:
+            update_expression += ", "
+        update_expression += f"{key} = :{key}"
+        expression_attribute_values[f":{key}"] = value
+        first = False
 
-    table_notification_reminders.update_item(
-        Key={"reminder_id": data["reminder_id"]},
-        UpdateExpression="""
-            SET user_id = :user_id,
-                notification_id = :notification_id,
-                booking_id = :booking_id,
-                event_id = :event_id,
-                seat_ids = :seat_ids,
-                type = :notification_type,
-                message = :message,
-                status = :status,
-                reminder_time = :reminder_time,
-                created_at = :created_at,
-                hide = :hide
-        """,
-        ExpressionAttributeValues={
-            ":user_id": data["user_id"],
-            ":notification_id": data["notification_id"],
-            ":booking_id": data["booking_id"],
-            ":event_id": data["event_id"],
-            ":seat_ids": data["seats_id"],
-            ":notification_type": data["notification_type"],
-            ":message": data["message"],
-            ":status": data["status"],
-            ":reminder_time": data["reminder_time"],
-            ":created_at": str(datetime.utcnow()),
-            ":hide": data["hide"]
-        }
-    )
+    try:
+        table_notification_reminders.update_item(
+            Key={"reminder_id": reminder_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeValues=expression_attribute_values
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     response = {
-        "reminder_id": data["reminder_id"],
-        "message": "Reminder updated successfully"
+        "reminder_id": reminder_id,
+        "updated_fields": data
     }
     return jsonify(response), 200
 
