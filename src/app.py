@@ -187,8 +187,8 @@ def create_event():
     required_fields = ["title", "description", "venue", "date", "total_seats"]
     for field in required_fields:
         if field not in data:
-            return jsonify({"error": 
-                             f"Missing required field: {field}"}), 400
+            return jsonify({"error":
+                            f"Missing required field: {field}"}), 400
 
     event = Event(
         title=data["title"],
@@ -226,7 +226,7 @@ def get_event_admin(event_id):
 # @require_admin
 def get_all_events_admin():
     response = events_table.scan()
-    events = [Event.from_dict(item).to_dict() 
+    events = [Event.from_dict(item).to_dict()
               for item in response["Items"]]
     return jsonify(events), 200
 
@@ -367,7 +367,8 @@ def get_user_bookings():
         KeyConditionExpression=Key("user_id").eq(str(user_id)),
     )
 
-    user_bookings = [Booking.from_dict(item).to_dict() for item in response["Items"]]
+    user_bookings = [Booking.from_dict(item).to_dict()\
+                     for item in response["Items"]]
     return jsonify(user_bookings), 200
 
 
@@ -408,7 +409,8 @@ def cancel_booking(booking_id):
         if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return jsonify({"error": "Associated event not found"}), 404
         app.logger.error(f"DynamoDB error during cancellation: {str(e)}")
-        return jsonify({"error": "Cancellation failed due to server error"}), 500
+        return jsonify({"error": "Cancellation failed \
+                        due to server error"}), 500
 
 
 @app.get("/health")
