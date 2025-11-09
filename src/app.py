@@ -177,7 +177,7 @@ class Booking:
 #     return wrapper
 
 
-# Admin Routes
+# Adding event as an admin
 @app.route('/api/admin/events', methods=['POST'])
 # @require_admin
 def create_event():
@@ -209,6 +209,7 @@ def create_event():
     return jsonify(event.to_dict()), 201
 
 
+# Getting specific event as admin
 @app.route('/api/admin/events/<event_id>', methods=['GET'])
 # @require_admin
 def get_event_admin(event_id):
@@ -222,6 +223,7 @@ def get_event_admin(event_id):
     return jsonify(event.to_dict()), 200
 
 
+# Getting all events as admin
 @app.route('/api/admin/events', methods=['GET'])
 # @require_admin
 def get_all_events_admin():
@@ -231,6 +233,7 @@ def get_all_events_admin():
     return jsonify(events), 200
 
 
+# Updating event as admin
 @app.route('/api/admin/events/<event_id>', methods=['PUT'])
 # @require_admin
 def update_event(event_id):
@@ -261,6 +264,7 @@ def update_event(event_id):
     return jsonify(event.to_dict()), 200
 
 
+# Deleting event as admin
 @app.route('/api/admin/events/<event_id>', methods=['DELETE'])
 # @require_admin
 def delete_event(event_id):
@@ -274,7 +278,7 @@ def delete_event(event_id):
     return jsonify({"message": "Event deleted successfully"}), 200
 
 
-# User Routes
+# Get all events as user
 @app.route('/api/events', methods=['GET'])
 # @require_auth
 def get_all_events():
@@ -283,6 +287,7 @@ def get_all_events():
     return jsonify(events), 200
 
 
+# Get specific event as user
 @app.route('/api/events/<event_id>', methods=['GET'])
 # @require_auth
 def get_event(event_id):
@@ -296,6 +301,7 @@ def get_event(event_id):
     return jsonify(event.to_dict()), 200
 
 
+# Book an event as user
 @app.route('/api/events/<event_id>/book', methods=['POST'])
 # @require_auth
 def book_event(event_id):
@@ -357,6 +363,7 @@ def book_event(event_id):
         return jsonify({"error": "Booking failed due to server error"}), 500
 
 
+# View bookings as user
 @app.route('/api/bookings', methods=['GET'])
 # @require_auth
 def get_user_bookings():
@@ -376,6 +383,7 @@ def get_user_bookings():
     return jsonify(user_bookings), 200
 
 
+# Delete booking as user
 @app.route('/api/bookings/<booking_id>', methods=['DELETE'])
 # @require_auth
 def cancel_booking(booking_id):
@@ -418,6 +426,7 @@ def cancel_booking(booking_id):
         return jsonify(payload), 500
 
 
+# Health check
 @app.get("/health")
 def health():
     """Liveness/health endpoint so clients can verify the service is up."""
