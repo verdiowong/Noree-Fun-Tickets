@@ -1,15 +1,12 @@
 stages:
-  - Security-Secrets
-  - Security-SCA
-  - Security-SAST
-  - Security-Container
+  - Security
 #   - Static Analysis
 #   - Test
   - Release
   - Deploy
 
-gitleaks:
-  stage: Security-Secrets
+"Security: Secrets (gitleaks)":
+  stage: Security
   image: 
     name: "zricethezav/gitleaks"
     entrypoint: [""]
@@ -27,8 +24,8 @@ gitleaks:
       when: on_success
     - when: on_success
 
-pip-audit:
-  stage: Security-SCA
+"Security: SCA (pip-audit)":
+  stage: Security
   image: python:3.11-slim
   before_script:
     - pip install --no-cache-dir pip-audit
@@ -39,15 +36,15 @@ pip-audit:
     when: always
     paths:
       - pip-audit.json
-  allow_failure: true
+  allow_failure: false
   rules:
     - changes:
         - services/notifications/**
       when: on_success
     - when: on_success
 
-bandit:
-  stage: Security-SAST
+"Security: SAST (bandit)":
+  stage: Security
   image: python:3.11-slim
   before_script:
     - python -m pip install --upgrade pip
@@ -58,15 +55,15 @@ bandit:
     when: always
     paths:
       - bandit.json
-  allow_failure: true
+  allow_failure: false
   rules:
     - changes:
         - services/notifications/**
       when: on_success
     - when: on_success
 
-trivy-config:
-  stage: Security-Container
+"Security: Container Config (trivy)":
+  stage: Security
   image:
     name: "aquasec/trivy:0.53.0"
     entrypoint: [""]
@@ -76,15 +73,15 @@ trivy-config:
   artifacts:
     when: always
     paths: [trivy-config.json]
-  allow_failure: true
+  allow_failure: false
   rules:
     - changes:
         - services/notifications/**
       when: on_success
     - when: on_success
 
-trivy-image:
-  stage: Security-Container
+"Security: Container Image (trivy)":
+  stage: Security
   image: docker:28.3.2
   services:
     - docker:28.3.2-dind
@@ -98,7 +95,7 @@ trivy-image:
   artifacts:
     when: always
     paths: [trivy-image.json]
-  allow_failure: true
+  allow_failure: false
   rules:
     - changes:
         - services/notifications/**
