@@ -141,6 +141,23 @@ def send_push():
     return jsonify(response), 200
 
 
+
+@app.route("/api/notifications/setreminder", methods=["GET"])
+def get_reminders():
+    user_id = request.args.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "Missing required field: user_id"}), 400
+
+    response = table_notification_reminders.query(
+        IndexName="user_id-index",
+        KeyConditionExpression=Key("user_id").eq(user_id)
+    )
+
+    reminders = response.get("Items", [])
+    return jsonify({"reminders": reminders}), 200
+
+
 # --- 4. Set reminder notification ---
 @app.route("/api/notifications/setreminder", methods=["POST"])
 def set_reminder():
@@ -155,7 +172,8 @@ def set_reminder():
         "message",
         "status",
         "reminder_time",
-        "created_at"
+        "created_at",
+        "hide"
     ]
 
     if not all(field in data for field in required_fields):
@@ -175,11 +193,70 @@ def set_reminder():
             "message": data["message"],
             "status": data["status"],
             "reminder_time": data["reminder_time"],
-            "created_at": str(datetime.utcnow())
+            "created_at": str(datetime.utcnow()),
+            "hide": data["hide"]
         }
     )
 
     response = send_notification("reminder", data)
+    return jsonify(response), 200
+
+
+@app.route("/api/notifications/setreminder", methods=["PUT"])
+def update_reminder():
+    data = request.get_json()
+    required_fields = [
+        "reminder_id",
+        "user_id",
+        "notification_id",
+        "booking_id",
+        "event_id",
+        "seats_id",
+        "notification_type",
+        "message",
+        "status",
+        "reminder_time",
+        "created_at",
+        "hide"
+    ]
+
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    table_notification_reminders.update_item(
+        Key={"reminder_id": data["reminder_id"]},
+        UpdateExpression="""
+            SET user_id = :user_id,
+                notification_id = :notification_id,
+                booking_id = :booking_id,
+                event_id = :event_id,
+                seat_ids = :seat_ids,
+                type = :notification_type,
+                message = :message,
+                status = :status,
+                reminder_time = :reminder_time,
+                created_at = :created_at,
+                hide = :hide
+        """,
+        ExpressionAttributeValues={
+            ":user_id": data["user_id"],
+            ":notification_id": data["notification_id"],
+            ":booking_id": data["booking_id"],
+            ":event_id": data["event_id"],
+            ":seat_ids": data["seats_id"],
+            ":notification_type": data["notification_type"],
+            ":message": data["message"],
+            ":status": data["status"],
+            ":reminder_time": data["reminder_time"],
+            ":created_at": str(datetime.utcnow()),
+            ":hide": data["hide"]
+        }
+    )
+
+    response = {
+        "reminder_id": data["reminder_id"],
+        "message": "Reminder updated successfully"
+    }
     return jsonify(response), 200
 
 
