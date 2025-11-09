@@ -122,6 +122,7 @@ class Booking:
         user_id,
         event_id,
         num_tickets=1,
+        seat_numbers=None,
         booking_id=None,
         created_at=None,
     ):
@@ -129,6 +130,7 @@ class Booking:
         self.user_id = user_id
         self.event_id = event_id
         self.num_tickets = num_tickets
+        self.seat_numbers = seat_numbers if seat_numbers else []
         self.created_at = created_at or datetime.now(UTC).isoformat()
 
     def to_dict(self):
@@ -137,6 +139,7 @@ class Booking:
             "user_id": self.user_id,
             "event_id": self.event_id,
             "num_tickets": self.num_tickets,
+            "seat_numbers": self.seat_numbers,
             "created_at": self.created_at,
         }
 
@@ -147,6 +150,7 @@ class Booking:
             user_id=data["user_id"],
             event_id=data["event_id"],
             num_tickets=data["num_tickets"],
+            seat_numbers=data.get("seat_numbers", []),
             booking_id=data["booking_id"],
             created_at=data.get("created_at"),
         )
@@ -307,16 +311,22 @@ def get_event(event_id):
 def book_event(event_id):
     """
     Race-condition-free booking using DynamoDB atomic operations.
+    Accepts user_id, num_tickets, and seat_numbers (list).
     """
     event_id = str(event_id)
     data = request.get_json() or {}
     num_tickets = int(data.get("num_tickets", 1))
     user_id = str(data.get("user_id", ""))
+    seat_numbers = data.get("seat_numbers", [])
 
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
     if num_tickets <= 0:
         return jsonify({"error": "Invalid ticket quantity"}), 400
+    
+    # Validate seat_numbers is a list
+    if not isinstance(seat_numbers, list):
+        return jsonify({"error": "seat_numbers must be a list"}), 400
 
     booking_id = str(uuid.uuid4())
 
@@ -333,7 +343,13 @@ def book_event(event_id):
         )
 
         updated_event = Event.from_dict(update_response["Attributes"])
-        booking = Booking(user_id, event_id, num_tickets, booking_id)
+        booking = Booking(
+            user_id=user_id,
+            event_id=event_id,
+            num_tickets=num_tickets,
+            seat_numbers=seat_numbers,
+            booking_id=booking_id
+        )
 
         bookings_table.put_item(Item=convert_to_decimal(booking.to_dict()))
 
