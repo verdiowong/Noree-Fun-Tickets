@@ -187,7 +187,8 @@ def create_event():
     required_fields = ["title", "description", "venue", "date", "total_seats"]
     for field in required_fields:
         if field not in data:
-            return jsonify({"error": f"Missing required field: {field}"}), 400
+            return jsonify({"error": 
+                             f"Missing required field: {field}"}), 400
 
     event = Event(
         title=data["title"],
@@ -225,7 +226,8 @@ def get_event_admin(event_id):
 # @require_admin
 def get_all_events_admin():
     response = events_table.scan()
-    events = [Event.from_dict(item).to_dict() for item in response["Items"]]
+    events = [Event.from_dict(item).to_dict() 
+              for item in response["Items"]]
     return jsonify(events), 200
 
 
@@ -316,7 +318,8 @@ def book_event(event_id):
         update_response = events_table.update_item(
             Key={"event_id": event_id},
             UpdateExpression="SET total_seats = total_seats - :tickets",
-            ConditionExpression="attribute_exists(event_id) AND total_seats >= :tickets",
+            ConditionExpression="attribute_exists(event_id)\
+                                 AND total_seats >= :tickets",
             ExpressionAttributeValues={":tickets": num_tickets},
             ReturnValues="ALL_NEW",
         )
@@ -390,7 +393,8 @@ def cancel_booking(booking_id):
         )
 
         bookings_table.delete_item(Key={"booking_id": booking_id})
-        updated_seats = convert_from_decimal(update_response["Attributes"]["total_seats"])
+        updated_seats = convert_from_decimal(update_response
+                                             ["Attributes"]["total_seats"])
 
         return jsonify(
             {
