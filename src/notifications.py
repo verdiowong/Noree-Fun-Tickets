@@ -202,11 +202,10 @@ def set_reminder():
     return jsonify(response), 200
 
 
-@app.route("/api/notifications/setreminder", methods=["PUT"])
-def update_reminder():
+@app.route("/api/notifications/setreminder/<reminder_id>", methods=["PUT"])
+def update_reminder(reminder_id):
     data = request.get_json()
     required_fields = [
-        "reminder_id",
         "user_id",
         "notification_id",
         "booking_id",
