@@ -153,28 +153,28 @@ class Booking:
 
 
 # Auth decorators
-def require_admin(f):
-    def wrapper(*args, **kwargs):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            return jsonify({"error": "Unauthorized"}), 401
-        if "admin" not in auth_header.lower():
-            return jsonify({"error": "Forbidden"}), 403
-        return f(*args, **kwargs)
+# def require_admin(f):
+#     def wrapper(*args, **kwargs):
+#         auth_header = request.headers.get("Authorization")
+#         if not auth_header:
+#             return jsonify({"error": "Unauthorized"}), 401
+#         if "admin" not in auth_header.lower():
+#             return jsonify({"error": "Forbidden"}), 403
+#         return f(*args, **kwargs)
 
-    wrapper.__name__ = f.__name__
-    return wrapper
+#     wrapper.__name__ = f.__name__
+#     return wrapper
 
 
-def require_auth(f):
-    def wrapper(*args, **kwargs):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            return jsonify({"error": "Unauthorized"}), 401
-        return f(*args, **kwargs)
+# def require_auth(f):
+#     def wrapper(*args, **kwargs):
+#         auth_header = request.headers.get("Authorization")
+#         if not auth_header:
+#             return jsonify({"error": "Unauthorized"}), 401
+#         return f(*args, **kwargs)
 
-    wrapper.__name__ = f.__name__
-    return wrapper
+#     wrapper.__name__ = f.__name__
+#     return wrapper
 
 
 # Admin Routes
