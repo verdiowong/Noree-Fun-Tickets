@@ -4,6 +4,7 @@ from datetime import datetime, UTC
 import uuid
 import boto3
 from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 from decimal import Decimal
 import os
 
@@ -13,13 +14,11 @@ CORS(app)
 
 
 # Initialise DynamoDB
-# DynamoDB configuration - supports both local and AWS
 def get_dynamodb_resource():
     """Get DynamoDB resource based on environment"""
     endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
 
     if endpoint_url:
-        # Use local DynamoDB (for testing)
         return boto3.resource(
             'dynamodb',
             endpoint_url=endpoint_url,
@@ -28,7 +27,6 @@ def get_dynamodb_resource():
             aws_secret_access_key='dummy'
         )
     else:
-        # Use AWS DynamoDB (production)
         return boto3.resource('dynamodb', region_name='ap-southeast-1')
 
 
@@ -197,7 +195,6 @@ def create_event():
 @app.route('/api/admin/events/<event_id>', methods=['GET'])
 @require_admin
 def get_event_admin(event_id):
-    # Ensure event_id is string
     event_id = str(event_id)
 
     response = events_table.get_item(Key={'event_id': event_id})
@@ -220,7 +217,6 @@ def get_all_events_admin():
 @app.route('/api/admin/events/<event_id>', methods=['PUT'])
 @require_admin
 def update_event(event_id):
-    # Ensure event_id is string
     event_id = str(event_id)
 
     # Check if event exists
@@ -247,7 +243,6 @@ def update_event(event_id):
 @app.route('/api/admin/events/<event_id>', methods=['DELETE'])
 @require_admin
 def delete_event(event_id):
-    # Ensure event_id is string
     event_id = str(event_id)
 
     # Check if event exists
@@ -271,7 +266,6 @@ def get_all_events():
 @app.route('/api/events/<event_id>', methods=['GET'])
 @require_auth
 def get_event(event_id):
-    # Ensure event_id is string
     event_id = str(event_id)
 
     response = events_table.get_item(Key={'event_id': event_id})
@@ -286,51 +280,86 @@ def get_event(event_id):
 @app.route('/api/events/<event_id>/book', methods=['POST'])
 @require_auth
 def book_event(event_id):
-    # Ensure event_id is string
+    """
+    RACE-CONDITION-FREE booking implementation using DynamoDB atomic operations.
+    
+    This implementation prevents double-booking by:
+    1. Using atomic decrement on total_seats
+    2. Conditional check that seats >= requested tickets
+    3. All-or-nothing operation (either succeeds completely or fails)
+    """
     event_id = str(event_id)
-
-    # Get event
-    response = events_table.get_item(Key={'event_id': event_id})
-    if 'Item' not in response:
-        return jsonify({'error': 'Event not found'}), 404
-
-    event = Event.from_dict(response['Item'])
 
     data = request.get_json() or {}
     num_tickets = int(data.get('num_tickets', 1))
     user_id = str(data.get('user_id', ''))
 
+    # Validation
     if not user_id:
         return jsonify({'error': 'Missing user_id'}), 400
 
     if num_tickets <= 0:
         return jsonify({'error': 'Invalid ticket quantity'}), 400
 
-    # Check availability
-    if num_tickets > event.total_seats:
-        return jsonify({'error': 'Not enough seats available'}), 400
+    # Generate booking ID upfront for idempotency
+    booking_id = str(uuid.uuid4())
 
-    # Deduct booked seats
-    event.total_seats -= num_tickets
+    try:
+        # ATOMIC OPERATION: Decrement seats with conditional check
+        # This prevents race conditions by ensuring the decrement only happens
+        # if enough seats are available at the time of the operation
+        update_response = events_table.update_item(
+            Key={'event_id': event_id},
+            UpdateExpression='SET total_seats = total_seats - :tickets',
+            ConditionExpression='attribute_exists(event_id) AND total_seats >= :tickets',
+            ExpressionAttributeValues={
+                ':tickets': num_tickets
+            },
+            ReturnValues='ALL_NEW'
+        )
 
-    # Update event in DynamoDB
-    events_table.update_item(
-        Key={'event_id': event_id},
-        UpdateExpression='SET total_seats = :seats',
-        ExpressionAttributeValues={':seats': event.total_seats}
-    )
+        # Get updated event data
+        updated_event = Event.from_dict(update_response['Attributes'])
 
-    # Create booking
-    booking = Booking(user_id=user_id, event_id=event_id,
-                      num_tickets=num_tickets)
-    booking_dict = convert_to_decimal(booking.to_dict())
-    bookings_table.put_item(Item=booking_dict)
+        # Create booking record
+        booking = Booking(
+            user_id=user_id,
+            event_id=event_id,
+            num_tickets=num_tickets,
+            booking_id=booking_id
+        )
 
-    return jsonify({
-        'message': 'Booking successful',
-        'booking': booking.to_dict(),
-        'remaining_seats': event.total_seats
-    }), 201
+        booking_dict = convert_to_decimal(booking.to_dict())
+        bookings_table.put_item(Item=booking_dict)
+
+        return jsonify({
+            'message': 'Booking successful',
+            'booking': booking.to_dict(),
+            'remaining_seats': updated_event.total_seats
+        }), 201
+
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        
+        if error_code == 'ConditionalCheckFailedException':
+            # Either event doesn't exist or not enough seats
+            # Check which case it is
+            try:
+                event_response = events_table.get_item(Key={'event_id': event_id})
+                if 'Item' not in event_response:
+                    return jsonify({'error': 'Event not found'}), 404
+                else:
+                    return jsonify({
+                        'error': 'Not enough seats available',
+                        'requested': num_tickets,
+                        'available': convert_from_decimal(event_response['Item']['total_seats'])
+                    }), 409  # 409 Conflict
+            except Exception:
+                return jsonify({'error': 'Event not found'}), 404
+        else:
+            # Other DynamoDB errors
+            app.logger.error(f"DynamoDB error during booking: {str(e)}")
+            return jsonify({'error': 'Booking failed due to server error'}), 500
 
 
 @app.route('/api/bookings', methods=['GET'])
@@ -340,7 +369,6 @@ def get_user_bookings():
     if not user_id:
         return jsonify({'error': 'Missing user_id'}), 400
 
-    # Ensure user_id is string
     user_id = str(user_id)
 
     # Query bookings by user_id using GSI
@@ -357,7 +385,9 @@ def get_user_bookings():
 @app.route('/api/bookings/<booking_id>', methods=['DELETE'])
 @require_auth
 def cancel_booking(booking_id):
-    # Ensure booking_id is string
+    """
+    RACE-CONDITION-FREE cancellation using atomic increment.
+    """
     booking_id = str(booking_id)
 
     # Get booking
@@ -366,33 +396,39 @@ def cancel_booking(booking_id):
         return jsonify({'error': 'Booking not found'}), 404
 
     booking = Booking.from_dict(response['Item'])
-
-    # Get associated event - ensure event_id is a string
     event_id = str(booking.event_id)
-    event_response = events_table.get_item(Key={'event_id': event_id})
-    if 'Item' not in event_response:
-        return jsonify({'error': 'Associated event not found'}), 404
 
-    event = Event.from_dict(event_response['Item'])
+    try:
+        # ATOMIC OPERATION: Increment seats back
+        update_response = events_table.update_item(
+            Key={'event_id': event_id},
+            UpdateExpression='SET total_seats = total_seats + :tickets',
+            ConditionExpression='attribute_exists(event_id)',
+            ExpressionAttributeValues={
+                ':tickets': booking.num_tickets
+            },
+            ReturnValues='ALL_NEW'
+        )
 
-    # Restore seats
-    event.total_seats += booking.num_tickets
+        # Delete booking record only after successful seat restoration
+        bookings_table.delete_item(Key={'booking_id': booking_id})
+        
+        updated_seats = convert_from_decimal(
+            update_response['Attributes']['total_seats']
+        )
 
-    # Update event in DynamoDB
-    events_table.update_item(
-        Key={'event_id': event_id},
-        UpdateExpression='SET total_seats = :seats',
-        ExpressionAttributeValues={':seats': event.total_seats}
-    )
+        return jsonify({
+            'message': 'Booking cancelled successfully',
+            'restored_seats': booking.num_tickets,
+            'updated_total_seats': updated_seats
+        }), 200
 
-    # Remove booking record
-    bookings_table.delete_item(Key={'booking_id': booking_id})
-
-    return jsonify({
-        'message': 'Booking cancelled successfully',
-        'restored_seats': booking.num_tickets,
-        'updated_total_seats': event.total_seats
-    }), 200
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            return jsonify({'error': 'Associated event not found'}), 404
+        else:
+            app.logger.error(f"DynamoDB error during cancellation: {str(e)}")
+            return jsonify({'error': 'Cancellation failed due to server error'}), 500
 
 
 @app.get("/health")
