@@ -281,8 +281,9 @@ def get_event(event_id):
 @require_auth
 def book_event(event_id):
     """
-    RACE-CONDITION-FREE booking implementation using DynamoDB atomic operations.
-    
+    RACE-CONDITION-FREE booking implementation
+    using DynamoDB atomic operations.
+
     This implementation prevents double-booking by:
     1. Using atomic decrement on total_seats
     2. Conditional check that seats >= requested tickets
@@ -311,7 +312,8 @@ def book_event(event_id):
         update_response = events_table.update_item(
             Key={'event_id': event_id},
             UpdateExpression='SET total_seats = total_seats - :tickets',
-            ConditionExpression='attribute_exists(event_id) AND total_seats >= :tickets',
+            ConditionExpression='attribute_exists(event_id) \
+                                 AND total_seats >= :tickets',
             ExpressionAttributeValues={
                 ':tickets': num_tickets
             },
@@ -340,19 +342,21 @@ def book_event(event_id):
 
     except ClientError as e:
         error_code = e.response['Error']['Code']
-        
+
         if error_code == 'ConditionalCheckFailedException':
             # Either event doesn't exist or not enough seats
             # Check which case it is
             try:
-                event_response = events_table.get_item(Key={'event_id': event_id})
+                event_response = \
+                events_table.get_item(Key={'event_id': event_id})
                 if 'Item' not in event_response:
                     return jsonify({'error': 'Event not found'}), 404
                 else:
                     return jsonify({
                         'error': 'Not enough seats available',
                         'requested': num_tickets,
-                        'available': convert_from_decimal(event_response['Item']['total_seats'])
+                        'available': \
+                            convert_from_decimal(event_response['Item']['total_seats'])
                     }), 409  # 409 Conflict
             except Exception:
                 return jsonify({'error': 'Event not found'}), 404
@@ -412,7 +416,7 @@ def cancel_booking(booking_id):
 
         # Delete booking record only after successful seat restoration
         bookings_table.delete_item(Key={'booking_id': booking_id})
-        
+
         updated_seats = convert_from_decimal(
             update_response['Attributes']['total_seats']
         )
@@ -428,7 +432,8 @@ def cancel_booking(booking_id):
             return jsonify({'error': 'Associated event not found'}), 404
         else:
             app.logger.error(f"DynamoDB error during cancellation: {str(e)}")
-            return jsonify({'error': 'Cancellation failed due to server error'}), 500
+            return jsonify({'error': \
+                            'Cancellation failed due to server error'}), 500
 
 
 @app.get("/health")
