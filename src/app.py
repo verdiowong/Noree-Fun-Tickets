@@ -316,7 +316,10 @@ def book_event(event_id):
         update_response = events_table.update_item(
             Key={"event_id": event_id},
             UpdateExpression="SET total_seats = total_seats - :tickets",
-            ConditionExpression="attribute_exists(event_id) AND total_seats >= :tickets",
+            ConditionExpression=(
+                "attribute_exists(event_id) "
+                "AND total_seats >= :tickets"
+            ),
             ExpressionAttributeValues={":tickets": num_tickets},
             ReturnValues="ALL_NEW",
         )
@@ -364,7 +367,10 @@ def get_user_bookings():
         KeyConditionExpression=Key("user_id").eq(str(user_id)),
     )
 
-    user_bookings = [Booking.from_dict(item).to_dict() for item in response["Items"]]
+    user_bookings = [
+        Booking.from_dict(item).to_dict()
+        for item in response["Items"]
+    ]
     return jsonify(user_bookings), 200
 
 
@@ -390,7 +396,9 @@ def cancel_booking(booking_id):
         )
 
         bookings_table.delete_item(Key={"booking_id": booking_id})
-        updated_seats = convert_from_decimal(update_response["Attributes"]["total_seats"])
+
+        updated_total = update_response["Attributes"]["total_seats"]
+        updated_seats = convert_from_decimal(updated_total)
 
         return jsonify(
             {
@@ -404,7 +412,8 @@ def cancel_booking(booking_id):
         if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
             return jsonify({"error": "Associated event not found"}), 404
         app.logger.error(f"DynamoDB error during cancellation: {str(e)}")
-        return jsonify({"error": "Cancellation failed due to server error"}), 500
+        payload = {"error": "Cancellation failed due to server error"}
+        return jsonify(payload), 500
 
 
 @app.get("/health")
