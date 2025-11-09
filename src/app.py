@@ -187,7 +187,8 @@ def create_event():
     required_fields = ["title", "description", "venue", "date", "total_seats"]
     for field in required_fields:
         if field not in data:
-            return jsonify({"error": f"Missing required field: {field}"}), 400
+            return jsonify({"error": 
+                             f"Missing required field: {field}"}), 400
 
     event = Event(
         title=data["title"],
@@ -225,7 +226,8 @@ def get_event_admin(event_id):
 # @require_admin
 def get_all_events_admin():
     response = events_table.scan()
-    events = [Event.from_dict(item).to_dict() for item in response["Items"]]
+    events = [Event.from_dict(item).to_dict() 
+              for item in response["Items"]]
     return jsonify(events), 200
 
 
