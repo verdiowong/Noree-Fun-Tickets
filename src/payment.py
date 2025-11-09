@@ -59,6 +59,17 @@ def create_payment_intent():
             metadata={"booking_id": data["booking_id"]},
         )
 
+        # Store initial payment record in DynamoDB
+        # Note: booking_id is the partition key for easy lookup
+        amount_dollars = (Decimal(intent.amount) / Decimal(100))
+        table.put_item(Item={
+            'booking_id': data["booking_id"],
+            'payment_intent_id': intent.id,
+            'amount': amount_dollars,
+            'currency': intent.currency.upper(),
+            'status': "pending",
+            'created_at': intent.created
+        })
         if intent.status.upper() != "SUCCEEDED":
             amount_dollars = Decimal(intent.amount) / Decimal(100)
             table.put_item(
@@ -91,6 +102,28 @@ def verify_payment_intent():
         return jsonify({"error": "Missing payment_id or booking_id"}), 400
 
     try:
+        # Confirm the payment with the token (simulated confirmation)
+        payment = stripe.PaymentIntent.confirm(
+            data["payment_id"],
+            payment_method=data["stripe_token"]
+        )
+
+        status = payment.status.upper()
+        result = "SUCCESS" if status == "SUCCEEDED" else "FAILED"
+    
+        if result == "SUCCESS":
+            # Update payment record in DynamoDB
+            # Find the booking_id from payment metadata
+            booking_id = payment.metadata.get("booking_id")
+            if booking_id:
+                table.update_item(
+                    Key={'booking_id': booking_id},
+                    UpdateExpression="SET #st = :s",
+                    ExpressionAttributeNames={"#st": "status"},
+                    ExpressionAttributeValues={":s": "completed"}
+                )
+
+        return jsonify({"payment_id": data["payment_id"], "status": result}), 200
         intent = stripe.PaymentIntent.retrieve(payment_id)
         if intent.status == "succeeded":
             table.put_item(
@@ -150,6 +183,18 @@ def process_refund(booking_id):
             )
         else:
             refund = stripe.Refund.create(payment_intent=payment_id)
+        
+        # Delete Item from DynamoDB after refund
+        table.delete_item(Key={"booking_id": booking_id})
+        
+        # Return simplified refund info
+        return jsonify({
+            "refund_id": refund.id,
+            "status": refund.status,
+            "amount": refund.amount/100,  # Convert back to dollars
+            "currency": refund.currency,
+            "payment_intent": getattr(refund, "payment_intent", None)
+        }), 200
 
         table.delete_item(Key={"payment_id": payment_id})
         return jsonify(
