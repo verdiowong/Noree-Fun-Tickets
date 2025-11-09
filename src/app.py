@@ -292,6 +292,29 @@ def proxy_to_service():
         "message": None if success else body.get("error") or body.get("message") or "Request failed"
     }), status
 
+
+@app.post("/internal/scheduler-trigger")
+def scheduler_trigger():
+    """
+    Endpoint for EventBridge Scheduler to invoke periodically.
+    This can trigger internal orchestrations or background checks.
+    """
+    print("Scheduler trigger received!")
+    payload = request.get_json(silent=True) or {}
+    print("Payload:", payload)
+
+    # Example: Call a microservice or perform a periodic check
+    # Example below just pings the booking service health endpoint:
+    try:
+        health_url = f"{BOOKING_SERVICE_URL}/healthz"
+        res = request_json("GET", health_url)
+        print("Booking service health:", res.status_code)
+    except Exception as e:
+        print("Health check failed:", e)
+
+    return jsonify({"status": "triggered", "source": "eventbridge", "payload": payload}), 200
+
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=8080)
 
