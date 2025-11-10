@@ -74,6 +74,15 @@ def orchestrate_booking():
         "currency": data["currency"],
     }, headers)
 
+    print("PAYMENT URL:", pay_url)
+    print("PAYMENT REQUEST:", {
+        "booking_id": booking_id,
+        "amount": data["amount"],
+        "currency": data["currency"],
+    })
+    print("PAYMENT RESPONSE:", pay_res.status_code, pay_res.text)
+
+
     if pay_res.status_code >= 400:
         return jsonify({"error": {"code": "PAYMENT_INTENT_FAILED", "message": pay_res.text}}), 400
 
