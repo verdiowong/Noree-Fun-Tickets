@@ -2,7 +2,7 @@ import json
 import uuid
 import boto3
 from flask import Flask, jsonify, request
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from config import (
     ADMIN_SERVICE_URL, BOOKING_SERVICE_URL, PAYMENT_SERVICE_URL, 
     NOTIFICATION_SERVICE_URL, SQS_QUEUE_URL, AWS_REGION
@@ -12,14 +12,7 @@ from auth import build_verifier_from_env
 
 
 app = Flask(__name__)
-CORS(app, resources={
-    r"/api/*": {
-        "origins": ["https://main.d1j4ffe4p8np66.amplifyapp.com"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
-
+CORS(app)
 _verifier = build_verifier_from_env()
 
 # Initialize SQS client
@@ -354,6 +347,11 @@ def orchestrate_booking_and_notify():
 
 
 @app.post("/api/orch/payments/confirm")
+@cross_origin(
+    origins=["https://main.d1j4ffe4p8np66.amplifyapp.com"],
+    methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"]
+)
 def orchestrate_payment_confirm():
     """Confirm a pending payment by forwarding to the payment service.
     Verifies the payment intent with Stripe."""
