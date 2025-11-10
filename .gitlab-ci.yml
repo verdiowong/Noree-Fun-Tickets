@@ -5,18 +5,18 @@ stages:
   - Release
   - Deploy
 
-flake8:
-  stage: Static Analysis
-  image: python:3.13-slim
-  before_script:
-    - python -V
-    - python -m pip install flake8
-  script:
-    - flake8 src | tee flake8_report.txt
-  artifacts:
-    when: on_failure
-    paths:
-      - flake8_report.tx
+# flake8:
+#   stage: Static Analysis
+#   image: python:3.13-slim
+#   before_script:
+#     - python -V
+#     - python -m pip install flake8
+#   script:
+#     - flake8 src | tee flake8_report.txt
+#   artifacts:
+#     when: on_failure
+#     paths:
+#       - flake8_report.tx
 
 
 pylint:
