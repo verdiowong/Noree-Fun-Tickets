@@ -1,119 +1,59 @@
-import os
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, UTC
 from typing import Optional
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from werkzeug.security import generate_password_hash, check_password_hash
-import boto3
-from boto3.dynamodb.conditions import Key
-import jwt
-from .models import User
+from .cognito_client import build_cognito_client, CognitoClient
+from .cognito_auth import build_verifier_from_env, CognitoVerifier
 
 # -------------------------
 # Config
 # -------------------------
-JWT_SECRET = os.environ.get("JWT_SECRET")
-JWT_ALG = "HS256"
-ACCESS_TTL_MIN = 60
-
 app = Flask(__name__)
 CORS(app)
-AWS_REGION = os.environ.get("AWS_REGION")
-dynamodb = (
-    boto3.resource('dynamodb', region_name=AWS_REGION) if AWS_REGION else None
-)
-users_table = dynamodb.Table('Users') if dynamodb else None
+
+# Initialize Cognito client and verifier
+cognito_client: Optional[CognitoClient] = build_cognito_client()
+cognito_verifier: Optional[CognitoVerifier] = build_verifier_from_env()
 
 # -------------------------
-# Persistence helpers (DynamoDB)
-
+# Helpers: Cognito User Management
 # -------------------------
 
 
-def _user_to_item(u: User) -> dict:
-    return {
-        "user_id": u.user_id,
-        "name": u.name,
-        "email": u.email,
-        "role": u.role,
-        "password_hash": u.password_hash,
-        "created_at": u.created_at,
-    }
-
-
-def _item_to_user(item: dict) -> User:
-    return User(
-        user_id=item["user_id"],
-        name=item["name"],
-        email=item["email"],
-        role=item.get("role", "USER"),
-        password_hash=item.get("password_hash", ""),
-        created_at=item.get("created_at")
-    )
-
-
-def _get_user_by_id(uid: str) -> Optional[User]:
-    if not users_table:
+def _get_user_by_id(uid: str) -> Optional[dict]:
+    """Get user by user ID (Cognito username)."""
+    if not cognito_client:
         return None
-    resp = users_table.get_item(Key={"user_id": uid})
-    item = resp.get("Item")
-    return _item_to_user(item) if item else None
-
-
-def _get_user_by_email(email: str) -> Optional[User]:
-    if not users_table:
+    try:
+        return cognito_client.get_user_by_id(uid)
+    except Exception:
         return None
-    # Prefer a GSI on email; fallback to scan for demo
-    resp = users_table.scan(
-        FilterExpression=Key("email").eq(email)
-    )
-    items = resp.get("Items", [])
-    return _item_to_user(items[0]) if items else None
 
 
-def _put_user(u: User) -> None:
-    if not users_table:
-        return
-    users_table.put_item(Item=_user_to_item(u))
-
-
-def _delete_user(uid: str) -> bool:
-    if not users_table:
-        return False
-    users_table.delete_item(Key={"user_id": uid})
-    return True
+def _get_user_by_email(email: str) -> Optional[dict]:
+    """Get user by email."""
+    if not cognito_client:
+        return None
+    try:
+        return cognito_client.get_user_by_email(email)
+    except Exception:
+        return None
 
 
 # -------------------------
 # Helpers: JWT + Auth
 # -------------------------
-def make_jwt(user: User) -> str:
-    now = datetime.now(UTC)
-    payload = {
-        "sub": user.user_id,
-        "email": user.email,
-        "name": user.name,
-        "role": user.role,      # 'ADMIN' or 'USER'
-        "iat": int(now.timestamp()),
-        "exp": int((now + timedelta(minutes=ACCESS_TTL_MIN)).timestamp()),
-
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
-
-
 def decode_jwt_from_header() -> Optional[dict]:
-    """Return decoded claims or None."""
-    auth = request.headers.get("Authorization", "")
-    if not auth.lower().startswith("bearer "):
+    """Return decoded claims from Cognito JWT token or None."""
+    if not cognito_verifier:
+        # Fallback to old JWT if Cognito not configured
         return None
-    token = auth.split(" ", 1)[1].strip()
-    try:
-        claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
-
-        return claims
-    except Exception:
-
+    
+    auth_header = request.headers.get("Authorization", "")
+    claims, error = cognito_verifier.verify_authorization_header(auth_header)
+    if error:
         return None
+    return claims
 
 
 def require_auth(f):
@@ -134,7 +74,20 @@ def require_admin(f):
         claims = decode_jwt_from_header()
         if not claims:
             return jsonify({"error": "Unauthorized"}), 401
-        if claims.get("role") != "ADMIN":
+        
+        # Check role from Cognito groups or custom attribute
+        role = claims.get("role")
+        if not role:
+            # Fallback: extract from groups if role not set
+            groups = claims.get("cognito:groups", [])
+            if "admin" in groups:
+                role = "ADMIN"
+            elif "user" in groups:
+                role = "USER"
+            else:
+                role = "USER"  # Default to USER if no groups
+        
+        if role != "ADMIN":
             return jsonify({"error": "Forbidden"}), 403
         request.claims = claims
         return f(*args, **kwargs)
@@ -149,17 +102,17 @@ def require_admin(f):
 @app.route("/healthz", methods=["GET"])
 def healthz():
     total_users = 0
-    if users_table:
+    if cognito_client:
         try:
-            scan = users_table.scan(Select='COUNT')
-            total_users = scan.get('Count', 0)
+            total_users = cognito_client.count_users()
         except Exception:
             total_users = -1
     return jsonify({
         "status": "ok",
         "service": "admin-user-service",
         "users": total_users,
-        "time": datetime.now(UTC).isoformat()
+        "time": datetime.now(UTC).isoformat(),
+        "cognito_enabled": cognito_client is not None
 
     }), 200
 
@@ -171,38 +124,51 @@ def healthz():
 # -------------------------
 @app.route("/api/users/register", methods=["POST"])
 def register_user():
+    if not cognito_client:
+        return jsonify({"error": "Cognito not configured"}), 500
+    
     data = request.get_json(force=True, silent=True) or {}
     for field in ("name", "email", "password"):
         if field not in data:
             return jsonify({"error": f"Missing field: {field}"}), 400
 
     email = data["email"].lower()
-    if _get_user_by_email(email):
+    
+    # Check if user already exists
+    existing_user = _get_user_by_email(email)
+    if existing_user:
         return jsonify({"error": "Email already exists"}), 409
 
-    # First user can be ADMIN for convenience (optional)
-    # First user heuristic: if table empty, make ADMIN
+    # Determine role: first user becomes ADMIN
     role = "USER"
     try:
-        if users_table:
-            cnt = users_table.scan(Select='COUNT').get('Count', 0)
-            if cnt == 0:
-                role = "ADMIN"
+        user_count = cognito_client.count_users()
+        if user_count == 0:
+            role = "ADMIN"
     except Exception:
         pass
-    pwd_hash = generate_password_hash(data["password"])
 
-    user = User.new(
-        name=data["name"],
-        email=email,
-        role=role,
-        password_hash=pwd_hash
-    )
-
-    _put_user(user)
-
-    public = user.to_public()
-    return jsonify(public), 201
+    try:
+        # Create user in Cognito
+        user = cognito_client.create_user(
+            email=email,
+            name=data["name"],
+            password=data["password"],
+            role=role
+        )
+        
+        # Return public user info (without sensitive data)
+        return jsonify({
+            "user_id": user["user_id"],
+            "name": user["name"],
+            "email": user["email"],
+            "role": user["role"],
+            "created_at": user["created_at"]
+        }), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Registration failed: {str(e)}"}), 500
 
 
 # -------------------------
@@ -212,16 +178,29 @@ def register_user():
 # -------------------------
 @app.route("/api/users/login", methods=["POST"])
 def login():
+    if not cognito_client:
+        return jsonify({"error": "Cognito not configured"}), 500
+    
     data = request.get_json(force=True, silent=True) or {}
     email = (data.get("email") or "").lower()
-    pwd = data.get("password")
-    u = _get_user_by_email(email)
-    if not u or not check_password_hash(u.password_hash, pwd or ""):
-        return jsonify({"error": "Invalid credentials"}), 401
+    password = data.get("password")
+    
+    if not email or not password:
+        return jsonify({"error": "Missing email or password"}), 400
 
-    token = make_jwt(u)
-
-    return jsonify({"token": token, "user_id": u.user_id, "role": u.role}), 200
+    try:
+        # Authenticate with Cognito
+        result = cognito_client.authenticate_user(email=email, password=password)
+        
+        return jsonify({
+            "token": result["token"],
+            "user_id": result["user_id"],
+            "role": result["role"]
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 401
+    except Exception as e:
+        return jsonify({"error": f"Login failed: {str(e)}"}), 500
 
 # -------------------------
 # API: Get user profile
@@ -234,13 +213,22 @@ def login():
 @app.route("/api/users/profile", methods=["GET"])
 @require_auth
 def get_profile():
-    uid = request.claims["sub"]
+    uid = request.claims.get("sub") or request.claims.get("username")
+    if not uid:
+        return jsonify({"error": "Invalid token"}), 401
 
-    u = _get_user_by_id(uid)
-    if not u:
-
+    user = _get_user_by_id(uid)
+    if not user:
         return jsonify({"error": "User not found"}), 404
-    return jsonify(u.to_public()), 200
+    
+    # Return public user info
+    return jsonify({
+        "user_id": user["user_id"],
+        "name": user["name"],
+        "email": user["email"],
+        "role": user["role"],
+        "created_at": user["created_at"]
+    }), 200
 
 # -------------------------
 # API: Update profile
@@ -253,24 +241,31 @@ def get_profile():
 @app.route("/api/users/profile", methods=["PUT"])
 @require_auth
 def update_profile():
-    uid = request.claims["sub"]
-    u = _get_user_by_id(uid)
-    if not u:
+    if not cognito_client:
+        return jsonify({"error": "Cognito not configured"}), 500
+    
+    uid = request.claims.get("sub") or request.claims.get("username")
+    if not uid:
+        return jsonify({"error": "Invalid token"}), 401
+
+    user = _get_user_by_id(uid)
+    if not user:
         return jsonify({"error": "User not found"}), 404
 
     data = request.get_json(force=True, silent=True) or {}
-    changed = False
-    if "name" in data and data["name"]:
-        u.name = data["name"]
-        changed = True
-
-    if "password" in data and data["password"]:
-        u.password_hash = generate_password_hash(data["password"])
-        changed = True
-
-    if changed:
-        _put_user(u)
-    return jsonify({"message": "Profile updated"}), 200
+    email = user["email"]
+    
+    try:
+        # Update user in Cognito
+        cognito_client.update_user(
+            email=email,
+            name=data.get("name"),
+            password=data.get("password"),
+            role=None  # Don't allow users to change their own role
+        )
+        return jsonify({"message": "Profile updated"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Update failed: {str(e)}"}), 500
 
 # -------------------------
 
@@ -283,14 +278,22 @@ def update_profile():
 @app.route("/api/admin/users", methods=["GET"])
 @require_admin
 def admin_list_users():
-    users = []
-
-    if users_table:
-        resp = users_table.scan()
-        users = (
-            [_item_to_user(item).to_public() for item in resp.get('Items', [])]
-        )
-    return jsonify(users), 200
+    if not cognito_client:
+        return jsonify({"error": "Cognito not configured"}), 500
+    
+    try:
+        users = cognito_client.list_users(limit=100)
+        # Return public user info
+        public_users = [{
+            "user_id": u["user_id"],
+            "name": u["name"],
+            "email": u["email"],
+            "role": u["role"],
+            "created_at": u["created_at"]
+        } for u in users]
+        return jsonify(public_users), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to list users: {str(e)}"}), 500
 
 
 # -------------------------
@@ -301,32 +304,51 @@ def admin_list_users():
 @app.route("/api/admin/users/<user_id>", methods=["DELETE"])
 @require_admin
 def admin_delete_user(user_id):
-    u = _get_user_by_id(user_id)
-    if not u:
+    if not cognito_client:
+        return jsonify({"error": "Cognito not configured"}), 500
+    
+    user = _get_user_by_id(user_id)
+    if not user:
         return jsonify({"error": "User not found"}), 404
-    _delete_user(user_id)
-    return jsonify({"message": "User deleted"}), 200
+    
+    try:
+        cognito_client.delete_user(user["email"])
+        return jsonify({"message": "User deleted"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to delete user: {str(e)}"}), 500
 
 
 # -------------------------
-# Seed for easy testing
+# Seed for easy testing (Cognito)
 # -------------------------
 def _seed():
-    if not users_table:
+    if not cognito_client:
         return
-    # Seed two users if table empty
+    # Seed two users if User Pool is empty
     try:
-        cnt = users_table.scan(Select='COUNT').get('Count', 0)
-        if cnt > 0:
+        user_count = cognito_client.count_users()
+        if user_count > 0:
             return
     except Exception:
         return
-    admin_pwd = generate_password_hash("adminpass")
-    admin = User.new("Demo Admin", "admin@example.com", "ADMIN", admin_pwd)
-    _put_user(admin)
-    user_pwd = generate_password_hash("userpass")
-    user = User.new("Demo User", "user@example.com", "USER", user_pwd)
-    _put_user(user)
+    
+    try:
+        # Create admin user
+        cognito_client.create_user(
+            email="admin@example.com",
+            name="Demo Admin",
+            password="AdminPass123!",
+            role="ADMIN"
+        )
+        # Create regular user
+        cognito_client.create_user(
+            email="user@example.com",
+            name="Demo User",
+            password="UserPass123!",
+            role="USER"
+        )
+    except Exception as e:
+        print(f"Warning: Could not seed users: {e}")
 
 
 if __name__ == "__main__":

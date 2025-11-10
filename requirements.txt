@@ -1,7 +1,7 @@
 flask
 flask-cors
 pyjwt
-werkzeug
 python-dotenv
 pytest
 boto3
+httpx
