@@ -229,15 +229,15 @@ class CognitoClient:
             groups = [g['GroupName'] for g in groups_response.get('Groups', [])]
             
             role = attributes.get('custom:role', 'USER')
-            if 'admin' in groups:
+            if 'ADMIN' in groups:
                 role = 'ADMIN'
-            elif 'user' in groups or not groups:
+            elif 'USER' in groups or not groups:
                 role = 'USER'
             
             return {
                 'user_id': response['Username'],
                 'email': attributes.get('email', user_id),
-                'name': attributes.get('name', ''),
+                'name': attributes.get('preferred_username', ''),
                 'role': role.upper(),
                 'created_at': response.get('UserCreateDate', datetime.now(UTC)).isoformat(),
                 'enabled': response.get('Enabled', True)
