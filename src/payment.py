@@ -1,12 +1,11 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-import os
-
-import boto3
 from boto3.dynamodb.conditions import Key
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import stripe
+import os
+import boto3
 
 
 AWS_REGION = os.environ.get("AWS_REGION")
