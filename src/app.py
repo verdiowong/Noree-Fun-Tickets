@@ -399,6 +399,18 @@ def get_user_bookings():
     return jsonify(user_bookings), 200
 
 
+@app.route('/api/bookings/<booking_id>', methods=['GET'])
+def get_booking(booking_id):
+    booking_id = str(booking_id)
+    response = bookings_table.get_item(Key={"booking_id": booking_id})
+
+    if "Item" not in response:
+        return jsonify({"error": "Booking not found"}), 404
+
+    booking = Booking.from_dict(response["Item"])
+    return jsonify(booking.to_dict()), 200
+
+
 # Delete booking as user
 @app.route('/api/bookings/<booking_id>', methods=['DELETE'])
 # @require_auth
