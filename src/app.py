@@ -205,6 +205,10 @@ def _process_booking(data, user_id, headers):
     }
     if "seats" in data and data["seats"]:
         booking_data["seats"] = data["seats"]
+
+    print("Booking URL:", book_url)
+    print("Booking data:", booking_data)
+    print("Headers:", headers)
     
     book_res = post_json(book_url, booking_data, headers)
     if book_res.status_code >= 400:
@@ -224,11 +228,29 @@ def _process_booking(data, user_id, headers):
         "currency": data["currency"],
     }, headers)
 
+    print("PAYMENT URL:", pay_url)
+    print("PAYMENT REQUEST:", {
+        "booking_id": booking_id,
+        "amount": data["amount"],
+        "currency": data["currency"],
+    })
+    print("PAYMENT RESPONSE:", pay_res.status_code, pay_res.text)
+
+
     if pay_res.status_code >= 400:
         return jsonify({"error": {"code": "PAYMENT_INTENT_FAILED", "message": pay_res.text}}), 400
 
     payment = pay_res.json()
-    return jsonify({"booking": booking, "payment": payment}), 201
+    return jsonify({
+        "success": True,
+        "booking": booking,
+        "payment": {
+            "payment_id": payment.get("payment_id"),
+            "client_secret": payment.get("client_secret"),
+            "amount": payment.get("amount"),
+            "currency": payment.get("currency")
+        }
+    }), 201
 
 
 @app.post("/api/orch/bookings/notify")
@@ -321,21 +343,38 @@ def orchestrate_booking_and_notify():
         resp["warnings"] = warnings
     return jsonify(resp), 201
 
+
 @app.post("/api/orch/payments/confirm")
 def orchestrate_payment_confirm():
     """Confirm a pending payment by forwarding to the payment service.
-    Expects a Stripe test PaymentMethod id (e.g. pm_card_visa)."""
+    Verifies the payment intent with Stripe."""
     data = request.get_json() or {}
-    for f in ("payment_id", "stripe_token"):
+    for f in ("payment_id", "booking_id"):
         if f not in data:
             return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
 
     headers = _auth_headers(request.headers)
-    url = f"{PAYMENT_SERVICE_URL}/api/payments/confirm"
-    res = post_json(url, {"payment_id": data["payment_id"], "stripe_token": data["stripe_token"]}, headers)
+    url = f"{PAYMENT_SERVICE_URL}/api/payments/verify-intent"
+    res = post_json(url, {"payment_id": data["payment_id"], "booking_id": data["booking_id"]}, headers)
     if res.status_code >= 400:
         return jsonify({"error": {"code": "PAYMENT_CONFIRM_FAILED", "message": res.text}}), 400
     return jsonify(res.json()), 200
+
+# @app.post("/api/orch/payments/confirm")
+# def orchestrate_payment_confirm():
+#     """Confirm a pending payment by forwarding to the payment service.
+#     Expects a Stripe test PaymentMethod id (e.g. pm_card_visa)."""
+#     data = request.get_json() or {}
+#     for f in ("payment_id", "stripe_token"):
+#         if f not in data:
+#             return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
+
+#     headers = _auth_headers(request.headers)
+#     url = f"{PAYMENT_SERVICE_URL}/api/payments/confirm"
+#     res = post_json(url, {"payment_id": data["payment_id"], "stripe_token": data["stripe_token"]}, headers)
+#     if res.status_code >= 400:
+#         return jsonify({"error": {"code": "PAYMENT_CONFIRM_FAILED", "message": res.text}}), 400
+#     return jsonify(res.json()), 200
 
 
 @app.post("/api/orch/payments/refund/<booking_id>")
