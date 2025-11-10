@@ -3,7 +3,7 @@ from decimal import Decimal
 import os
 
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Key, Attr
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import stripe
@@ -22,17 +22,30 @@ CORS(app)
 
 
 def get_payment_intent_id(booking_id: str):
-    """Fetch the Stripe payment_intent_id for a booking from DynamoDB."""
+    """Fetch the Stripe payment_intent_id (payment_id) for a booking from DynamoDB."""
     try:
+        # Query by booking_id (requires GSI on booking_id)
         response = table.query(
+            IndexName="booking_id-index",  # Assumes GSI exists
             KeyConditionExpression=Key("booking_id").eq(booking_id)
         )
         items = response.get("Items", [])
         if not items:
             return None
-        return items[0].get("payment_intent_id")
+        # payment_id is the same as payment_intent_id (Stripe intent.id)
+        return items[0].get("payment_id")
     except Exception as exc:
-        print(f"Error querying DynamoDB: {exc}")
+        # Fallback: if GSI doesn't exist, scan (less efficient)
+        print(f"Error querying DynamoDB (trying scan): {exc}")
+        try:
+            response = table.scan(
+                FilterExpression=Attr("booking_id").eq(booking_id)
+            )
+            items = response.get("Items", [])
+            if items:
+                return items[0].get("payment_id")
+        except Exception:
+            pass
         return None
 
 
@@ -60,28 +73,18 @@ def create_payment_intent():
         )
 
         # Store initial payment record in DynamoDB
-        # Note: booking_id is the partition key for easy lookup
-        amount_dollars = (Decimal(intent.amount) / Decimal(100))
-        table.put_item(Item={
-            'booking_id': data["booking_id"],
-            'payment_intent_id': intent.id,
-            'amount': amount_dollars,
-            'currency': intent.currency.upper(),
-            'status': "pending",
-            'created_at': intent.created
-        })
-        if intent.status.upper() != "SUCCEEDED":
-            amount_dollars = Decimal(intent.amount) / Decimal(100)
-            table.put_item(
-                Item={
-                    "payment_id": intent.id,
-                    "booking_id": intent.metadata.get("booking_id", "unknown"),
-                    "amount": amount_dollars,
-                    "currency": intent.currency.upper(),
-                    "status": "pending",
-                    "created_at": intent.created,
-                }
-            )
+        # Note: payment_id is the partition key (same as Stripe payment_intent.id)
+        amount_dollars = Decimal(intent.amount) / Decimal(100)
+        table.put_item(
+            Item={
+                "payment_id": intent.id,  # Primary key - required (Stripe payment_intent.id)
+                "booking_id": data["booking_id"],
+                "amount": amount_dollars,
+                "currency": intent.currency.upper(),
+                "status": "pending",
+                "created_at": intent.created,
+            }
+        )
 
         return jsonify(
             {"client_secret": intent.client_secret, "payment_id": intent.id}
