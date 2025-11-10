@@ -12,7 +12,14 @@ from auth import build_verifier_from_env
 
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["https://main.d1j4ffe4p8np66.amplifyapp.com"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
+
 _verifier = build_verifier_from_env()
 
 # Initialize SQS client
