@@ -8,6 +8,8 @@ BOOKING_SERVICE_URL = os.getenv("BOOKING_SERVICE_URL", "http://ticket-booking-se
 PAYMENT_SERVICE_URL = os.getenv("PAYMENT_SERVICE_URL", "http://payments.tickets.local:8083")
 NOTIFICATION_SERVICE_URL = os.getenv("NOTIFICATION_SERVICE_URL", "http://notifications.tickets.local:8082")
 
+SQS_QUEUE_URL = os.getenv("SQS_QUEUE_URL", "https://sqs.ap-southeast-1.amazonaws.com/375039967321/booking-requests.fifo")
+AWS_REGION = os.getenv("AWS_REGION", "ap-southeast-1")
 # Networking and resiliency
 REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT_MS", "5000")) / 1000.0
 RETRY_MAX_ATTEMPTS = int(os.getenv("RETRY_MAX_ATTEMPTS", "3"))
