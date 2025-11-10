@@ -148,6 +148,7 @@ def get_reminders():
     if not user_id:
         return jsonify({"error": "Missing required field: user_id"}), 400
 
+    print(f"Fetching reminders for user_id: {user_id}")
     try:
         response = table_notification_reminders.query(
             IndexName="user_id-index",
@@ -155,6 +156,7 @@ def get_reminders():
         )
 
         reminders = response.get("Items", [])
+        print(f"Reminders fetched: {reminders}")
         
         # Convert Decimal to float/int for JSON serialization
         def convert_decimals(obj):
