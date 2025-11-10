@@ -43,57 +43,57 @@ def _get_user_by_email(email: str) -> Optional[dict]:
 # -------------------------
 # Helpers: JWT + Auth
 # -------------------------
-def decode_jwt_from_header() -> Optional[dict]:
-    """Return decoded claims from Cognito JWT token or None."""
-    if not cognito_verifier:
-        # Fallback to old JWT if Cognito not configured
-        return None
+# def decode_jwt_from_header() -> Optional[dict]:
+#     """Return decoded claims from Cognito JWT token or None."""
+#     if not cognito_verifier:
+#         # Fallback to old JWT if Cognito not configured
+#         return None
     
-    auth_header = request.headers.get("Authorization", "")
-    claims, error = cognito_verifier.verify_authorization_header(auth_header)
-    if error:
-        return None
-    return claims
+#     auth_header = request.headers.get("Authorization", "")
+#     claims, error = cognito_verifier.verify_authorization_header(auth_header)
+#     if error:
+#         return None
+#     return claims
 
 
-def require_auth(f):
-    def wrapper(*args, **kwargs):
-        claims = decode_jwt_from_header()
-        if not claims:
-            return jsonify({"error": "Unauthorized"}), 401
+# def require_auth(f):
+#     def wrapper(*args, **kwargs):
+#         claims = decode_jwt_from_header()
+#         if not claims:
+#             return jsonify({"error": "Unauthorized"}), 401
 
-        request.claims = claims  # attach to request context
-        return f(*args, **kwargs)
+#         request.claims = claims  # attach to request context
+#         return f(*args, **kwargs)
 
-    wrapper.__name__ = f.__name__
-    return wrapper
+#     wrapper.__name__ = f.__name__
+#     return wrapper
 
 
-def require_admin(f):
-    def wrapper(*args, **kwargs):
-        claims = decode_jwt_from_header()
-        if not claims:
-            return jsonify({"error": "Unauthorized"}), 401
+# def require_admin(f):
+#     def wrapper(*args, **kwargs):
+#         claims = decode_jwt_from_header()
+#         if not claims:
+#             return jsonify({"error": "Unauthorized"}), 401
         
-        # Check role from Cognito groups or custom attribute
-        role = claims.get("role")
-        if not role:
-            # Fallback: extract from groups if role not set
-            groups = claims.get("cognito:groups", [])
-            if "admin" in groups:
-                role = "ADMIN"
-            elif "user" in groups:
-                role = "USER"
-            else:
-                role = "USER"  # Default to USER if no groups
+#         # Check role from Cognito groups or custom attribute
+#         role = claims.get("role")
+#         if not role:
+#             # Fallback: extract from groups if role not set
+#             groups = claims.get("cognito:groups", [])
+#             if "admin" in groups:
+#                 role = "ADMIN"
+#             elif "user" in groups:
+#                 role = "USER"
+#             else:
+#                 role = "USER"  # Default to USER if no groups
         
-        if role != "ADMIN":
-            return jsonify({"error": "Forbidden"}), 403
-        request.claims = claims
-        return f(*args, **kwargs)
+#         if role != "ADMIN":
+#             return jsonify({"error": "Forbidden"}), 403
+#         request.claims = claims
+#         return f(*args, **kwargs)
 
-    wrapper.__name__ = f.__name__
-    return wrapper
+#     wrapper.__name__ = f.__name__
+#     return wrapper
 
 
 # -------------------------
@@ -211,7 +211,7 @@ def login():
 
 
 @app.route("/api/users/profile", methods=["GET"])
-@require_auth
+# @require_auth
 def get_profile():
     uid = request.claims.get("sub") or request.claims.get("username")
     if not uid:
@@ -239,7 +239,7 @@ def get_profile():
 
 
 @app.route("/api/users/profile", methods=["PUT"])
-@require_auth
+# @require_auth
 def update_profile():
     if not cognito_client:
         return jsonify({"error": "Cognito not configured"}), 500
@@ -276,7 +276,7 @@ def update_profile():
 
 # -------------------------
 @app.route("/api/admin/users", methods=["GET"])
-@require_admin
+# @require_admin
 def admin_list_users():
     if not cognito_client:
         return jsonify({"error": "Cognito not configured"}), 500
@@ -302,7 +302,7 @@ def admin_list_users():
 # -> {message: "User deleted"}
 # -------------------------
 @app.route("/api/admin/users/<user_id>", methods=["DELETE"])
-@require_admin
+# @require_admin
 def admin_delete_user(user_id):
     if not cognito_client:
         return jsonify({"error": "Cognito not configured"}), 500
