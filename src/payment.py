@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 import os
 
@@ -62,15 +62,8 @@ def create_payment_intent():
         # Store initial payment record in DynamoDB
         # Note: booking_id is the partition key for easy lookup
         amount_dollars = (Decimal(intent.amount) / Decimal(100))
-        table.put_item(Item={
-            'booking_id': data["booking_id"],
-            'payment_intent_id': intent.id,
-            'amount': amount_dollars,
-            'currency': intent.currency.upper(),
-            'status': "pending",
-            'created_at': intent.created
-        })
-        if intent.status.upper() != "SUCCEEDED":
+
+        if intent.status.upper() == "SUCCEEDED":
             amount_dollars = Decimal(intent.amount) / Decimal(100)
             table.put_item(
                 Item={
@@ -78,8 +71,8 @@ def create_payment_intent():
                     "booking_id": intent.metadata.get("booking_id", "unknown"),
                     "amount": amount_dollars,
                     "currency": intent.currency.upper(),
-                    "status": "pending",
-                    "created_at": intent.created,
+                    "status": intent.status,
+                    "created_at": datetime.fromtimestamp(intent.created, tz=timezone.utc).isoformat()
                 }
             )
 
