@@ -8,7 +8,7 @@ import requests
 from datetime import datetime, UTC
 from decimal import Decimal
 from typing import Dict, Any, Optional
-from .config import (
+from config import (
     BOOKING_SERVICE_URL, PAYMENT_SERVICE_URL, SQS_QUEUE_URL,
     AWS_REGION, DYNAMODB_TABLE, MAX_MESSAGES, WAIT_TIME, VISIBILITY_TIMEOUT
 )
