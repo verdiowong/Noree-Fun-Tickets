@@ -5,6 +5,7 @@ import uuid
 import boto3
 from boto3.dynamodb.conditions import Key
 from decimal import Decimal
+from datetime import datetime, timedelta, timezone
 import os
 
 
@@ -393,6 +394,41 @@ def cancel_booking(booking_id):
         'restored_seats': booking.num_tickets,
         'updated_total_seats': event.total_seats
     }), 200
+
+
+@app.route("/api/events/starting-soon", methods=["GET"])
+def get_events_starting_soon():
+    """
+    Retrieve all events that start about 3 hours from now (±5 minutes tolerance).
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        tolerance = timedelta(minutes=5)
+        target_time = now + timedelta(hours=3)
+
+        response = events_table.scan()
+        items = response.get("Items", [])
+
+        upcoming_events = []
+        for item in items:
+            try:
+                event_date = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+
+                # Check if event_date is within ±5 minutes of (now + 3h)
+                if abs((event_date - target_time)) <= tolerance:
+                    upcoming_events.append(convert_from_decimal(item))
+
+            except Exception as e:
+                print(f"Skipping event {item.get('event_id')}: invalid date format ({e})")
+
+        return jsonify({
+            "count": len(upcoming_events),
+            "events": upcoming_events
+        }), 200
+
+    except Exception as e:
+        print("Error fetching upcoming events:", e)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.get("/health")
