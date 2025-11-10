@@ -17,7 +17,7 @@ MAILJET_SECRET_KEY = os.environ.get("MAILJET_SECRET_KEY")
 AWS_REGION = os.environ.get("AWS_REGION")
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 table_notifications = dynamodb.Table("notifications")
-table_notification_reminders = dynamodb.Table("notificationS_reminder")
+table_notification_reminders = dynamodb.Table("notifications_reminder")
 
 
 # Utility function to simulate sending a notification
@@ -112,9 +112,8 @@ def send_push():
     data = request.get_json()
     required_fields = ["user_id",
                        "notification_id",
-                       "booking_id" 
+                       "booking_id",
                        "event_id",
-                       "seats_id",
                        "notification_type",
                        "message",
                        "status",
@@ -183,7 +182,6 @@ def set_reminder():
         "notification_id",
         "booking_id",
         "event_id",
-        "seats_id",
         "notification_type",
         "message",
         "status",
@@ -204,7 +202,6 @@ def set_reminder():
             "user_id": data["user_id"],
             "booking_id": data["booking_id"],
             "event_id": data["event_id"],
-            "seat_ids": data["seats_id"],
             "type": data["notification_type"],
             "message": data["message"],
             "status": data["status"],
