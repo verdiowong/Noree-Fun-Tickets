@@ -247,8 +247,8 @@ def _process_booking(data, user_id, headers):
         "success": True,
         "booking": booking,
         "payment": {
-            "payment_id": payment.get("payment_id"),
-            "client_secret": payment.get("client_secret"),
+        "payment_id": payment.get("payment_id") or payment.get("paymentId"),
+        "client_secret": payment.get("client_secret") or payment.get("clientSecret"),
             "amount": payment.get("amount"),
             "currency": payment.get("currency")
         }
