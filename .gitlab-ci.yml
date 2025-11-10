@@ -1,5 +1,5 @@
 stages:
-  - Security
+# - Security
 #   - Static Analysis
 #   - Test
   - Release

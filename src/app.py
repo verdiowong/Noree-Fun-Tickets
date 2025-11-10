@@ -50,6 +50,10 @@ def orchestrate_booking():
     # Include seats array if provided
     if "seats" in data:
         booking_data["seats"] = data["seats"]
+
+    print("Booking URL:", book_url)
+    print("Booking data:", booking_data)
+    print("Headers:", headers)
     
     book_res = post_json(book_url, booking_data, headers)
 
