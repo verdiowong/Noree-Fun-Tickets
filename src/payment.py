@@ -67,20 +67,18 @@ def create_payment_intent():
 
         # Store initial payment record in DynamoDB
         # Note: booking_id is the partition key for easy lookup
-        amount_dollars = (Decimal(intent.amount) / Decimal(100))
 
-        if intent.status.upper() == "SUCCEEDED":
-            amount_dollars = Decimal(intent.amount) / Decimal(100)
-            table.put_item(
-                Item={
-                    "payment_id": intent.id,
-                    "booking_id": intent.metadata.get("booking_id", "unknown"),
-                    "amount": amount_dollars,
-                    "currency": intent.currency.upper(),
-                    "status": intent.status,
-                    "created_at": datetime.fromtimestamp(intent.created, tz=timezone.utc).isoformat()
-                }
-            )
+        amount_dollars = Decimal(intent.amount) / Decimal(100)
+        table.put_item(
+            Item={
+                "payment_id": intent.id,
+                "booking_id": intent.metadata.get("booking_id", "unknown"),
+                "amount": amount_dollars,
+                "currency": intent.currency.upper(),
+                "status": "pending",
+                "created_at": datetime.fromtimestamp(intent.created, tz=timezone.utc).isoformat()
+            }
+        )
 
         return jsonify(
             {"client_secret": intent.client_secret, "payment_id": intent.id}
