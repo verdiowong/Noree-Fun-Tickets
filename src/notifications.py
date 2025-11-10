@@ -141,7 +141,7 @@ def send_push():
 
 
 
-@app.route("/api/notifications/setreminder", methods=["GET"])
+@app.route("/api/notifications/getreminders", methods=["GET"])
 def get_reminders():
     user_id = request.args.get("user_id")
 
@@ -157,7 +157,7 @@ def get_reminders():
 
         reminders = response.get("Items", [])
         print(f"Reminders fetched: {reminders}")
-        
+
         # Convert Decimal to float/int for JSON serialization
         def convert_decimals(obj):
             if isinstance(obj, list):
