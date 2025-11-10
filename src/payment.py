@@ -17,13 +17,7 @@ table = dynamodb.Table("payments")
 stripe.api_key = STRIPE_SECRET_KEY
 
 app = Flask(__name__)
-CORS(app, resources={
-    r"/api/*": {
-        "origins": ["https://main.d1j4ffe4p8np66.amplifyapp.com"],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+CORS(app)
 
 
 
