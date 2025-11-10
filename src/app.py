@@ -177,6 +177,7 @@ def orchestrate_booking_sync():
     Synchronous booking endpoint (original implementation).
     Use this for testing or immediate processing.
     """
+    print("Synchronous booking endpoint called")
     claims = None
     if _verifier:
         claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
