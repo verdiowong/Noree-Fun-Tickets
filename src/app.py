@@ -87,6 +87,7 @@ def orchestrate_booking():
         return jsonify({"error": {"code": "PAYMENT_INTENT_FAILED", "message": pay_res.text}}), 400
 
     payment = pay_res.json()
+    print("PAYMENT SERVICE RESPONSE JSON:", payment)
     return jsonify({
         "success": True,
         "booking": booking,
