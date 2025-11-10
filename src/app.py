@@ -43,10 +43,15 @@ def orchestrate_booking():
     book_url = f"{BOOKING_SERVICE_URL}/api/events/{data['event_id']}/book"
     # Use token subject when available; otherwise fall back to client value (dev)
     effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
-    book_res = post_json(book_url, {
+    booking_data = {
         "num_tickets": data["num_tickets"],
         "user_id": effective_user_id,
-    }, headers)
+    }
+    # Include seats array if provided
+    if "seats" in data:
+        booking_data["seats"] = data["seats"]
+    
+    book_res = post_json(book_url, booking_data, headers)
 
     if book_res.status_code >= 400:
         return jsonify({"error": {"code": "BOOKING_FAILED", "message": book_res.text}}), 400
@@ -107,10 +112,15 @@ def orchestrate_booking_and_notify():
     # 1) Create booking
     book_url = f"{BOOKING_SERVICE_URL}/api/events/{data['event_id']}/book"
     effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
-    book_res = post_json(book_url, {
+    booking_data = {
         "num_tickets": data["num_tickets"],
         "user_id": effective_user_id,
-    }, headers)
+    }
+    # Include seats array if provided
+    if "seats" in data:
+        booking_data["seats"] = data["seats"]
+    
+    book_res = post_json(book_url, booking_data, headers)
     if book_res.status_code >= 400:
         return jsonify({"error": {"code": "BOOKING_FAILED", "message": book_res.text}}), 400
 
