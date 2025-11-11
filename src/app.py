@@ -125,6 +125,7 @@ class Booking:
         seat_numbers=None,
         booking_id=None,
         created_at=None,
+        status=None
     ):
         self.booking_id = booking_id or str(uuid.uuid4())
         self.user_id = user_id
@@ -132,6 +133,7 @@ class Booking:
         self.num_tickets = num_tickets
         self.seat_numbers = seat_numbers if seat_numbers else []
         self.created_at = created_at or datetime.now(UTC).isoformat()
+        self.status = status
 
     def to_dict(self):
         return {
@@ -141,6 +143,7 @@ class Booking:
             "num_tickets": self.num_tickets,
             "seat_numbers": self.seat_numbers,
             "created_at": self.created_at,
+            "status": self.status
         }
 
     @staticmethod
@@ -153,6 +156,7 @@ class Booking:
             seat_numbers=data.get("seat_numbers", []),
             booking_id=data["booking_id"],
             created_at=data.get("created_at"),
+            status=data.get("status")
         )
 
 
@@ -305,6 +309,36 @@ def get_event(event_id):
     return jsonify(event.to_dict()), 200
 
 
+@app.route('/api/events/book/<booking_id>', methods=['PATCH'])
+def update_booking(booking_id):
+    data = request.get_json()
+    update_expression = "SET "
+    expression_attribute_values = {}
+    first = True
+
+    for key, value in data.items():
+        if not first:
+            update_expression += ", "
+        update_expression += f"{key} = :{key}"
+        expression_attribute_values[f":{key}"] = value
+        first = False
+
+    try:
+        bookings_table.update_item(
+            Key={"booking_id": booking_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeValues=expression_attribute_values
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    response = {
+        "booking_id": booking_id,
+        "updated_fields": data
+    }
+    return jsonify(response), 200
+
+
 # Book an event as user
 @app.route('/api/events/<event_id>/book', methods=['POST'])
 # @require_auth
@@ -318,6 +352,7 @@ def book_event(event_id):
     num_tickets = int(data.get("num_tickets", 1))
     user_id = str(data.get("user_id", ""))
     seat_numbers = data.get("seat_numbers", [])
+    status = data.get("status", "pending")
 
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
@@ -348,7 +383,8 @@ def book_event(event_id):
             event_id=event_id,
             num_tickets=num_tickets,
             seat_numbers=seat_numbers,
-            booking_id=booking_id
+            booking_id=booking_id,
+            status=status
         )
 
         bookings_table.put_item(Item=convert_to_decimal(booking.to_dict()))
