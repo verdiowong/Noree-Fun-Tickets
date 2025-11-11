@@ -303,7 +303,10 @@ def poll_sqs_messages():
 
             messages = response.get("Messages", [])
             if not messages:
+                print("[SQS] No messages, sleeping...")
+                time.sleep(5)
                 continue  # No messages right now, keep polling
+
 
             for msg in messages:
                 try:
