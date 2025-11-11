@@ -492,7 +492,8 @@ def get_events_starting_soon():
                                                         .replace("Z", "+00:00"))
                 else:
                     # assume UTC if no timezone is present
-                    event_date = datetime.fromisoformat(raw_date).replace(
+                    event_date = datetime.fromisoformat(
+                        raw_date).replace(
                         tzinfo=timezone.utc
                     )
 
@@ -500,7 +501,7 @@ def get_events_starting_soon():
 
                 # Check if event_date is within ±5 minutes of (now + 3h)
                 # if abs((event_date - target_time)) <= tolerance:
-                # Any future events(testing purposes) 
+                # Any future events(testing purposes)
                 if event_date > now:
                     event_id = item["event_id"]
 
