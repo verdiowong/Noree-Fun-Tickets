@@ -471,11 +471,6 @@ def proxy_to_service():
     if not endpoint.startswith("/"):
         endpoint = "/" + endpoint
 
-    if isinstance(json_body, str):
-        try:
-            json_body = json.loads(json_body)
-        except Exception:
-            pass
 
     target_url = f"{base}{endpoint}"
 
@@ -490,6 +485,13 @@ def proxy_to_service():
     # For GET, treat data as query params; otherwise send JSON body
     params = data if (method == "GET" and isinstance(data, dict)) else None
     json_body = None if method == "GET" else data
+
+    if isinstance(json_body, str):
+        try:
+            json_body = json.loads(json_body)
+        except Exception:
+            pass
+
 
     res = request_json(method, target_url, headers=headers, json=json_body, params=params)
 
