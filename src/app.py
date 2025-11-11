@@ -177,29 +177,29 @@ def check_booking_status(request_id: str):
         }), 500
 
 
-@app.post("/api/orch/bookings")
-def orchestrate_booking_sync():
-    """
-    Synchronous booking endpoint (original implementation).
-    Use this for testing or immediate processing.
-    """
-    print("Synchronous booking endpoint called")
-    claims = None
-    if _verifier:
-        claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
-        if err:
-            return jsonify({"error": {"code": "UNAUTHORIZED", "message": err}}), 401
+# @app.post("/api/orch/bookings")
+# def orchestrate_booking_sync():
+#     """
+#     Synchronous booking endpoint (original implementation).
+#     Use this for testing or immediate processing.
+#     """
+#     print("Synchronous booking endpoint called")
+#     claims = None
+#     if _verifier:
+#         claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
+#         if err:
+#             return jsonify({"error": {"code": "UNAUTHORIZED", "message": err}}), 401
 
-    data = request.get_json() or {}
-    for f in ("event_id", "num_tickets", "user_id", "amount", "currency"):
-        if f not in data:
-            return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
+#     data = request.get_json() or {}
+#     for f in ("event_id", "num_tickets", "user_id", "amount", "currency"):
+#         if f not in data:
+#             return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
 
-    headers = _auth_headers(request.headers)
-    effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
+#     headers = _auth_headers(request.headers)
+#     effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
     
-    # Process booking immediately (original logic)
-    return _process_booking(data, effective_user_id, headers)
+#     # Process booking immediately (original logic)
+#     return _process_booking(data, effective_user_id, headers)
 
 
 def _process_booking(data, user_id, headers):
