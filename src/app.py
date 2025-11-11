@@ -478,7 +478,7 @@ def proxy_to_service():
     params = data if (method == "GET" and isinstance(data, dict)) else None
     json_body = None if method == "GET" else data
 
-    # Define json_body before checking if it’s a string
+    # ✅ FIX: define json_body before checking if it’s a string
     if isinstance(json_body, str):
         try:
             json_body = json.loads(json_body)
@@ -605,7 +605,7 @@ def scheduler_trigger():
                     "title": event["title"],
                     "user_id": user,
                     "email": user_map[user],
-                    "message": f"Reminder: {event['title']} starts in 3 hours!"
+                    "message": f"Reminder: {event['title']} starts soon!"
                 }
                 enqueue_notifications(message)
     return jsonify({"status": "queued"}), 200
