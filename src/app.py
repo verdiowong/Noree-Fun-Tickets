@@ -195,6 +195,80 @@ def orchestrate_booking_sync():
     return _process_booking(data, effective_user_id, headers)
 
 
+@app.post("/api/orch/bookings/fifo")
+def orchestrate_booking_fifo_hybrid():
+    """
+    Hybrid endpoint: Process synchronously (immediate client_secret) but use SQS FIFO for ordering/auditing.
+    This gives you:
+    - Immediate client_secret (synchronous processing)
+    - FIFO ordering guarantees (via SQS for audit trail)
+    - Post-processing queue (notifications, logging, etc.)
+    """
+    claims = None
+    if _verifier:
+        claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
+        if err:
+            return jsonify({"error": {"code": "UNAUTHORIZED", "message": err}}), 401
+
+    data = request.get_json() or {}
+    for f in ("event_id", "num_tickets", "user_id", "amount", "currency"):
+        if f not in data:
+            return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
+
+    headers = _auth_headers(request.headers)
+    effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
+    
+    # Step 1: Process booking synchronously to get immediate client_secret
+    booking_result = _process_booking(data, effective_user_id, headers)
+    
+    # If booking failed, return error immediately
+    response_obj, status_code = booking_result
+    if status_code != 201:
+        return booking_result
+    
+    # Step 2: Extract booking and payment info from response
+    booking_response = response_obj.get_json()
+    booking_id = booking_response.get("booking", {}).get("booking_id")
+    payment_id = booking_response.get("payment", {}).get("payment_id")
+    
+    # Step 3: Send to SQS FIFO for ordering/auditing/post-processing (non-blocking)
+    request_id = str(uuid.uuid4())
+    message_body = {
+        "request_id": request_id,
+        "event_id": data["event_id"],
+        "booking_id": booking_id,
+        "payment_id": payment_id,
+        "user_id": effective_user_id,
+        "num_tickets": data["num_tickets"],
+        "amount": data["amount"],
+        "currency": data["currency"],
+        "seat_numbers": data.get("seat_numbers"),
+        "status": "completed",  # Already processed
+        "processed_at": datetime.now(timezone.utc).isoformat(),
+        "type": "audit"  # Indicates this is for audit/ordering, not processing
+    }
+    
+    try:
+        # Send to SQS FIFO for ordering/audit trail (fire and forget)
+        sqs.send_message(
+            QueueUrl=SQS_QUEUE_URL,
+            MessageBody=json.dumps(message_body),
+            MessageGroupId=str(data["event_id"]),  # Ensures FIFO ordering per event
+            MessageDeduplicationId=request_id,
+            MessageAttributes={
+                'RequestId': {'DataType': 'String', 'StringValue': request_id},
+                'EventId': {'DataType': 'String', 'StringValue': str(data["event_id"])},
+                'Type': {'DataType': 'String', 'StringValue': 'audit'}  # Worker can skip processing
+            }
+        )
+    except Exception as e:
+        # Log error but don't fail the request (SQS is for audit, not critical path)
+        print(f"[WARN] Failed to send audit message to SQS: {str(e)}")
+    
+    # Step 4: Return immediate response with client_secret
+    return booking_result
+
+
 def _process_booking(data, user_id, headers):
     """Internal function to process a booking (used by sync endpoint and worker)."""
     # 1) Create booking
