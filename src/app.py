@@ -402,39 +402,49 @@ def get_user_bookings():
     return jsonify(user_bookings), 200
 
 
-@app.route('/api/bookings/<booking_id>', methods=['GET'])
-def get_booking(booking_id):
-    booking_id = str(booking_id)
-    response = bookings_table.get_item(Key={"booking_id": booking_id})
-
-    if "Item" not in response:
-        return jsonify({"error": "Booking not found"}), 404
-
-    booking = Booking.from_dict(response["Item"])
-    return jsonify(booking.to_dict()), 200
-
-
 @app.route("/api/events/starting-soon", methods=["GET"])
 def get_events_starting_soon():
     """
-    Retrieve all events that start about 3 hours from now (±5 minutes tolerance).
+    Retrieve all events that start about 3 hours from now (±5 minutes tolerance),
+    and include the list of users who booked each event.
     """
     try:
         now = datetime.now(timezone.utc)
         tolerance = timedelta(minutes=5)
         target_time = now + timedelta(hours=3)
 
+        # Scan all events
         response = events_table.scan()
         items = response.get("Items", [])
 
         upcoming_events = []
+
         for item in items:
             try:
                 event_date = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
 
                 # Check if event_date is within ±5 minutes of (now + 3h)
                 if abs((event_date - target_time)) <= tolerance:
-                    upcoming_events.append(convert_from_decimal(item))
+                    event_id = item["event_id"]
+
+                    # Query the Bookings table for users who booked this event
+                    bookings_response = bookings_table.query(
+                        IndexName="EventIdIndex",  # Must exist (event_id as GSI)
+                        KeyConditionExpression=Key("event_id").eq(event_id)
+                    )
+                    user_bookings = bookings_response.get("Items", [])
+
+                    # Extract unique user_ids
+                    user_ids = list({b["user_id"] for b in user_bookings})
+
+                    # Append combined data
+                    event_data = convert_from_decimal(item)
+                    event_data["event_id"] = event_id
+                    event_data["title"] = item.get("title")
+                    event_data["user_ids"] = user_ids
+                    event_data["num_bookings"] = len(user_bookings)
+
+                    upcoming_events.append(event_data)
 
             except Exception as e:
                 print(f"Skipping event {item.get('event_id')}: invalid date format ({e})")
