@@ -21,6 +21,7 @@ _verifier = build_verifier_from_env()
 
 # Intialize Cognito client 
 cognito = boto3.client("cognito-idp", region_name=AWS_REGION)
+cognito_pool_id = os.environ.get("COGNITO_USER_POOL_ID")
 
 # Initialize SQS client
 sqs = boto3.client('sqs', region_name=AWS_REGION)
@@ -506,7 +507,7 @@ def get_all_cognito_users():
     pagination_token = None
 
     while True:
-        params = {"UserPoolId": _verifier.user_pool_id}
+        params = {"UserPoolId": cognito_pool_id}
         if pagination_token:
             params["PaginationToken"] = pagination_token
 
@@ -592,7 +593,7 @@ def scheduler_trigger():
     print(f"Trigger caller")
     print(f"Events fetched: {events}")
     print(f"Users fetched: {users}")
-    
+
     for event in events:
         for user in event["user_ids"]:
             if user in user_map:
