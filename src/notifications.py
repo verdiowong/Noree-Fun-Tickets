@@ -25,14 +25,6 @@ sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
 SQS_NOTIFICATIONS_QUEUE_URL = os.environ.get("SQS_NOTIFICATIONS_QUEUE_URL")
 
 
-print("\n=== DEBUG ENV LOADING ===")
-print(f"AWS_REGION: {os.environ.get('AWS_REGION')}")
-print(f"SQS_NOTIFICATIONS_QUEUE_URL: {os.environ.get('SQS_NOTIFICATIONS_QUEUE_URL')}")
-print(f"NOTIFICATIONS_QUEUE_URL: {os.environ.get('NOTIFICATIONS_QUEUE_URL')}")
-print("==========================\n")
-
-
-
 # Utility function to simulate sending a notification
 def send_notification(notification_type, data):
     # In real usage: integrate with email/SMS/push APIs (e.g., SendGrid, Twilio, Firebase)
@@ -79,7 +71,7 @@ def send_email():
                 "type": "EMAIL",
                 "message": data["message"],
                 "status": "SENT",
-                "created_at": str(datetime.utcnow())
+                "created_at": datetime.now(datetime.UTC).isoformat()
             }
         )
         return jsonify({"message": "Email sent successfully"}), 200
@@ -111,7 +103,7 @@ def send_sms():
             "type": "SMS",
             "message": data["message"],
             "status": "SENT",
-            "created_at": str(datetime.utcnow())
+            "created_at": datetime.now(datetime.UTC).isoformat()
         }
     )
 
@@ -145,7 +137,7 @@ def send_push():
             "type": "PUSH",
             "message": data["message"],
             "status": "SENT",
-            "created_at": str(datetime.utcnow())
+            "created_at": datetime.now(datetime.UTC).isoformat()
         }
     )
 
@@ -221,7 +213,7 @@ def set_reminder():
             "message": data["message"],
             "status": data["status"],
             "reminder_time": data["reminder_time"],
-            "created_at": str(datetime.utcnow()),
+            "created_at": datetime.now(datetime.UTC).isoformat(),
             "hide": data["hide"]
         }
     )
@@ -294,7 +286,7 @@ def send_email_from_queue(body):
                     "type": "EMAIL",
                     "message": message,
                     "status": "SENT",
-                    "created_at": str(datetime.utcnow())
+                    "created_at": datetime.now(datetime.UTC).isoformat()
                 }
             )
         else:
@@ -306,17 +298,36 @@ def send_email_from_queue(body):
 
 
 def send_sms_from_queue(body):
-    """Send SMS directly from an SQS message payload."""
+    """Send SMS directly from an SQS message payload via Twilio."""
     try:
-        sms_data = {
-            "user_id": body["user_id"],
-            "phone_number": body["phone_number"],
-            "message": body["message"]
-        }
-        send_notification("sms", sms_data)
-        print(f"[SMS] Sent queued SMS to {sms_data['phone_number']}")
+        phone_number = body["phone_number"]
+        message_text = body["message"]
+
+        # Initialize Twilio client
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        twilio_message = client.messages.create(
+            body=message_text,
+            from_="+16077033565",  # your Twilio number
+            to=phone_number
+        )
+
+        print(f"✅ [SMS] Sent queued SMS to {phone_number} (SID={twilio_message.sid})")
+
+        # Log to DynamoDB
+        table_notifications.put_item(
+            Item={
+                "notification_id": str(uuid.uuid4()),
+                "user_id": body.get("user_id", "unknown"),
+                "type": "SMS",
+                "message": message_text,
+                "status": "SENT",
+                "created_at": datetime.now(datetime.UTC).isoformat()
+            }
+        )
+
     except Exception as e:
         print(f"[ERROR] Failed to send SMS from queue: {e}")
+
 
 
 def poll_sqs_messages():
@@ -367,7 +378,6 @@ def poll_sqs_messages():
         except Exception as e:
             print(f"[ERROR] SQS polling error: {e}")
             time.sleep(5)
-        print(f"[DEBUG] Polling exception: {e}")
 
 
 @app.get("/health")
