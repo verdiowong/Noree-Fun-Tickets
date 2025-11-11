@@ -27,7 +27,7 @@ SQS_NOTIFICATIONS_QUEUE_URL = os.environ.get("SQS_NOTIFICATIONS_QUEUE_URL")
 
 print("\n=== DEBUG ENV LOADING ===")
 print(f"AWS_REGION: {os.environ.get('AWS_REGION')}")
-print(f"SQS_NOTIFICATION_QUEUE_URL: {os.environ.get('SQS_NOTIFICATION_QUEUE_URL')}")
+print(f"SQS_NOTIFICATIONS_QUEUE_URL: {os.environ.get('SQS_NOTIFICATIONS_QUEUE_URL')}")
 print(f"NOTIFICATIONS_QUEUE_URL: {os.environ.get('NOTIFICATIONS_QUEUE_URL')}")
 print("==========================\n")
 
