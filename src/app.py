@@ -459,14 +459,21 @@ def update_booking(booking_id):
 
 @app.route("/api/events/starting-soon", methods=["GET"])
 def get_events_starting_soon():
-    """
-    Retrieve all events that start about 3 hours from now (±5 minutes tolerance),
-    and include the list of users who booked each event.
-    """
+
     try:
         now = datetime.now(timezone.utc)
-        tolerance = timedelta(minutes=5)
-        target_time = now + timedelta(hours=3)
+
+        """
+        Retrieve all events that start about 3 hours from now (±5 minutes tolerance),
+        and include the list of users who booked each event.
+        """
+        # tolerance = timedelta(minutes=5)
+        # target_time = now + timedelta(hours=3)
+
+        """
+        Retrieve everything in the future (for testing purposes)
+        """
+        
 
         # Scan all events
         response = events_table.scan()
@@ -479,7 +486,11 @@ def get_events_starting_soon():
                 event_date = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
 
                 # Check if event_date is within ±5 minutes of (now + 3h)
-                if abs((event_date - target_time)) <= tolerance:
+                # if abs((event_date - target_time)) <= tolerance:
+                
+                # Any future events(testing purposes) 
+                if event_date > now:
+
                     event_id = item["event_id"]
 
                     # Query the Bookings table for users who booked this event
