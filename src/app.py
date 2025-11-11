@@ -589,6 +589,7 @@ def scheduler_trigger():
     users = get_all_cognito_users()          # query Cognito
     user_map = {u["username"]: u["email"] for u in users}
 
+
     for event in events:
         for user in event["user_ids"]:
             if user in user_map:
