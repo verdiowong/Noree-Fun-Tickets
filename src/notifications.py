@@ -313,6 +313,7 @@ def poll_sqs_messages():
                     # Route to appropriate notification channel
                     if body.get("type") == "EMAIL":
                         send_email_from_queue(body)
+                        print("Sending email from queue")
                     elif body.get("type") == "SMS":
                         send_sms_from_queue(body)
                     else:
