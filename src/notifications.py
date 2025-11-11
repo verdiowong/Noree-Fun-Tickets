@@ -1,4 +1,7 @@
+import json
 import os
+import threading
+import time
 import requests
 from urllib import response
 import uuid
@@ -18,6 +21,8 @@ AWS_REGION = os.environ.get("AWS_REGION")
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 table_notifications = dynamodb.Table("notifications")
 table_notification_reminders = dynamodb.Table("notifications_reminder")
+sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
+SQS_NOTIFICATIONS_QUEUE_URL = os.environ.get("SQS_NOTIFICATION_QUEUE_URL")
 
 
 # Utility function to simulate sending a notification
@@ -246,6 +251,78 @@ def update_reminder(reminder_id):
     }
     return jsonify(response), 200
 
+# sqs polling to process notification jobs
+def send_email_from_queue(body):
+    """Send email directly from an SQS message payload."""
+    try:
+        email_data = {
+            "email": body["email"],
+            "subject": f"Reminder: {body['title']}",
+            "message": body["message"],
+            "user_id": body.get("user_id", "unknown")
+        }
+        send_notification("email", email_data)
+        print(f"[EMAIL] Sent queued email to {email_data['email']}")
+    except Exception as e:
+        print(f"[ERROR] Failed to send email from queue: {e}")
+
+
+def send_sms_from_queue(body):
+    """Send SMS directly from an SQS message payload."""
+    try:
+        sms_data = {
+            "user_id": body["user_id"],
+            "phone_number": body["phone_number"],
+            "message": body["message"]
+        }
+        send_notification("sms", sms_data)
+        print(f"[SMS] Sent queued SMS to {sms_data['phone_number']}")
+    except Exception as e:
+        print(f"[ERROR] Failed to send SMS from queue: {e}")
+
+
+def poll_sqs_messages():
+    """Continuously poll the SQS queue for new notification jobs."""
+    print("[INFO] Starting SQS polling loop for notifications...")
+
+    while True:
+        try:
+            response = sqs.receive_message(
+                QueueUrl=SQS_NOTIFICATIONS_QUEUE_URL,
+                MaxNumberOfMessages=10,
+                WaitTimeSeconds=15
+            )
+
+            messages = response.get("Messages", [])
+            if not messages:
+                continue  # No messages right now, keep polling
+
+            for msg in messages:
+                try:
+                    body = json.loads(msg["Body"])
+                    print(f"[SQS] Received message: {body}")
+
+                    # Route to appropriate notification channel
+                    if body.get("type") == "EMAIL":
+                        send_email_from_queue(body)
+                    elif body.get("type") == "SMS":
+                        send_sms_from_queue(body)
+                    else:
+                        send_notification("push", body)
+
+                    # Delete message after success
+                    sqs.delete_message(
+                        QueueUrl=SQS_NOTIFICATIONS_QUEUE_URL,
+                        ReceiptHandle=msg["ReceiptHandle"]
+                    )
+                    print(f"[SQS] Deleted message: {msg['MessageId']}")
+                except Exception as e:
+                    print(f"[ERROR] Processing SQS message failed: {e}")
+
+        except Exception as e:
+            print(f"[ERROR] SQS polling error: {e}")
+            time.sleep(5)
+
 
 @app.get("/health")
 def healthz():
@@ -259,4 +336,5 @@ def healthz():
 
 
 if __name__ == "__main__":
+    threading.Thread(target=poll_sqs_messages, daemon=True).start()
     app.run(debug=True, host="0.0.0.0", port=8082)
