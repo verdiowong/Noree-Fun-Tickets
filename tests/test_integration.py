@@ -57,8 +57,7 @@ def test_create_event_missing_fields(test_client):
     assert 'error' in response.json
 
 
-# SKIPPED: Auth is disabled in current implementation
-@pytest.mark.skip(reason="Auth decorators are currently commented out")
+# Create event unsuccessfully due to no authority
 def test_create_event_unauthorized(test_client):
     """Test creating event without admin authorization"""
     new_event = {
@@ -76,8 +75,7 @@ def test_create_event_unauthorized(test_client):
     assert response.status_code == 401
 
 
-# SKIPPED: Auth is disabled in current implementation
-@pytest.mark.skip(reason="Auth decorators are currently commented out")
+# Create event unsuccessfully due to having only user authority
 def test_create_event_forbidden(test_client):
     """Test creating event with non-admin token"""
     new_event = {

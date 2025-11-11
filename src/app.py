@@ -6,6 +6,7 @@ import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 from decimal import Decimal
+from datetime import datetime, timedelta, timezone
 import os
 
 
@@ -161,79 +162,78 @@ class Booking:
 
 
 # Auth decorators
-# def require_admin(f):
-#     def wrapper(*args, **kwargs):
-#         auth_header = request.headers.get("Authorization")
-#         if not auth_header:
-#             return jsonify({"error": "Unauthorized"}), 401
-#         if "admin" not in auth_header.lower():
-#             return jsonify({"error": "Forbidden"}), 403
-#         return f(*args, **kwargs)
+def require_admin(f):
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header:
+            return jsonify({"error": "Unauthorized"}), 401
+        if "admin" not in auth_header.lower():
+            return jsonify({"error": "Forbidden"}), 403
+        return f(*args, **kwargs)
 
-#     wrapper.__name__ = f.__name__
-#     return wrapper
-
-
-# def require_auth(f):
-#     def wrapper(*args, **kwargs):
-#         auth_header = request.headers.get("Authorization")
-#         if not auth_header:
-#             return jsonify({"error": "Unauthorized"}), 401
-#         return f(*args, **kwargs)
-
-#     wrapper.__name__ = f.__name__
-#     return wrapper
+    wrapper.__name__ = f.__name__
+    return wrapper
 
 
-# Adding event as an admin
+def require_auth(f):
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Unauthorized'}), 401
+        return f(*args, **kwargs)
+    wrapper.__name__ = f.__name__
+    return wrapper
+
+
+# Admin Routes
 @app.route('/api/admin/events', methods=['POST'])
-# @require_admin
+@require_admin
 def create_event():
     data = request.get_json()
 
     # Validate required fields
-    required_fields = ["title", "description", "venue", "date", "total_seats"]
+    required_fields = ['title', 'description', 'venue', 'date', 'total_seats']
     for field in required_fields:
         if field not in data:
-            return jsonify({"error":
-                            f"Missing required field: {field}"}), 400
+            return jsonify({'error': f'Missing required field: {field}'}), 400
 
     event = Event(
-        title=data["title"],
-        description=data["description"],
-        venue=data["venue"],
-        date=data["date"],
-        total_seats=data["total_seats"],
-        price=data.get("price"),
-        event_image=data.get("event_image"),
-        venue_image=data.get("venue_image"),
-        created_by=data.get("created_by"),
-        event_id=data.get("event_id"),
+        title=data['title'],
+        description=data['description'],
+        venue=data['venue'],
+        date=data['date'],
+        total_seats=data['total_seats'],
+        price=data.get('price'),
+        event_image=data.get('event_image'),
+        venue_image=data.get('venue_image'),
+        created_by=data.get('created_by'),
+        event_id=data.get('event_id')
     )
 
+    # Save to DynamoDB
     event_dict = convert_to_decimal(event.to_dict())
     events_table.put_item(Item=event_dict)
 
     return jsonify(event.to_dict()), 201
 
 
-# Getting specific event as admin
 @app.route('/api/admin/events/<event_id>', methods=['GET'])
-# @require_admin
+@require_admin
 def get_event_admin(event_id):
+    # Ensure event_id is string
     event_id = str(event_id)
-    response = events_table.get_item(Key={"event_id": event_id})
 
-    if "Item" not in response:
-        return jsonify({"error": "Event not found"}), 404
+    response = events_table.get_item(Key={'event_id': event_id})
 
-    event = Event.from_dict(response["Item"])
+    if 'Item' not in response:
+        return jsonify({'error': 'Event not found'}), 404
+
+    event = Event.from_dict(response['Item'])
     return jsonify(event.to_dict()), 200
 
 
-# Getting all events as admin
 @app.route('/api/admin/events', methods=['GET'])
-# @require_admin
+@require_admin
 def get_all_events_admin():
     response = events_table.scan()
     events = [Event.from_dict(item).to_dict()
@@ -241,18 +241,19 @@ def get_all_events_admin():
     return jsonify(events), 200
 
 
-# Updating event as admin
 @app.route('/api/admin/events/<event_id>', methods=['PUT'])
-# @require_admin
+@require_admin
 def update_event(event_id):
+    # Ensure event_id is string
     event_id = str(event_id)
-    response = events_table.get_item(Key={"event_id": event_id})
 
-    if "Item" not in response:
-        return jsonify({"error": "Event not found"}), 404
+    # Check if event exists
+    response = events_table.get_item(Key={'event_id': event_id})
+    if 'Item' not in response:
+        return jsonify({'error': 'Event not found'}), 404
 
     data = request.get_json()
-    event = Event.from_dict(response["Item"])
+    event = Event.from_dict(response['Item'])
 
     for field in [
         "title",
@@ -272,40 +273,42 @@ def update_event(event_id):
     return jsonify(event.to_dict()), 200
 
 
-# Deleting event as admin
 @app.route('/api/admin/events/<event_id>', methods=['DELETE'])
-# @require_admin
+@require_admin
 def delete_event(event_id):
+    # Ensure event_id is string
     event_id = str(event_id)
-    response = events_table.get_item(Key={"event_id": event_id})
 
-    if "Item" not in response:
-        return jsonify({"error": "Event not found"}), 404
+    # Check if event exists
+    response = events_table.get_item(Key={'event_id': event_id})
+    if 'Item' not in response:
+        return jsonify({'error': 'Event not found'}), 404
 
-    events_table.delete_item(Key={"event_id": event_id})
-    return jsonify({"message": "Event deleted successfully"}), 200
+    events_table.delete_item(Key={'event_id': event_id})
+    return jsonify({'message': 'Event deleted successfully'}), 200
 
 
-# Get all events as user
+# User Routes
 @app.route('/api/events', methods=['GET'])
-# @require_auth
+@require_auth
 def get_all_events():
     response = events_table.scan()
-    events = [Event.from_dict(item).to_dict() for item in response["Items"]]
+    events = [Event.from_dict(item).to_dict() for item in response['Items']]
     return jsonify(events), 200
 
 
-# Get specific event as user
 @app.route('/api/events/<event_id>', methods=['GET'])
-# @require_auth
+@require_auth
 def get_event(event_id):
+    # Ensure event_id is string
     event_id = str(event_id)
-    response = events_table.get_item(Key={"event_id": event_id})
 
-    if "Item" not in response:
-        return jsonify({"error": "Event not found"}), 404
+    response = events_table.get_item(Key={'event_id': event_id})
 
-    event = Event.from_dict(response["Item"])
+    if 'Item' not in response:
+        return jsonify({'error': 'Event not found'}), 404
+
+    event = Event.from_dict(response['Item'])
     return jsonify(event.to_dict()), 200
 
 
@@ -341,7 +344,7 @@ def update_booking(booking_id):
 
 # Book an event as user
 @app.route('/api/events/<event_id>/book', methods=['POST'])
-# @require_auth
+@require_auth
 def book_event(event_id):
     """
     Race-condition-free booking using DynamoDB atomic operations.
@@ -445,6 +448,41 @@ def get_booking(booking_id):
 
     booking = Booking.from_dict(response["Item"])
     return jsonify(booking.to_dict()), 200
+
+
+@app.route("/api/events/starting-soon", methods=["GET"])
+def get_events_starting_soon():
+    """
+    Retrieve all events that start about 3 hours from now (±5 minutes tolerance).
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        tolerance = timedelta(minutes=5)
+        target_time = now + timedelta(hours=3)
+
+        response = events_table.scan()
+        items = response.get("Items", [])
+
+        upcoming_events = []
+        for item in items:
+            try:
+                event_date = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+
+                # Check if event_date is within ±5 minutes of (now + 3h)
+                if abs((event_date - target_time)) <= tolerance:
+                    upcoming_events.append(convert_from_decimal(item))
+
+            except Exception as e:
+                print(f"Skipping event {item.get('event_id')}: invalid date format ({e})")
+
+        return jsonify({
+            "count": len(upcoming_events),
+            "events": upcoming_events
+        }), 200
+
+    except Exception as e:
+        print("Error fetching upcoming events:", e)
+        return jsonify({"error": str(e)}), 500
 
 
 # Delete booking as user
