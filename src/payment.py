@@ -42,46 +42,6 @@ def health_check():
     return jsonify({"status": "Payment service is healthy"}), 200
 
 
-@app.route("/api/payments/create-intent", methods=["POST"])
-def create_payment_intent():
-    """Create a Stripe PaymentIntent and store a pending record."""
-    data = request.get_json()
-    required_fields = ["booking_id", "amount", "currency"]
-
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
-
-    try:
-        intent = stripe.PaymentIntent.create(
-            amount=int(float(data["amount"]) * 100),
-            currency=data["currency"],
-            payment_method_types=["card"],
-            metadata={"booking_id": data["booking_id"]},
-        )
-
-        # Store initial payment record in DynamoDB
-        # Note: booking_id is the partition key for easy lookup
-
-        amount_dollars = Decimal(intent.amount) / Decimal(100)
-        table.put_item(
-            Item={
-                "payment_id": intent.id,
-                "booking_id": intent.metadata.get("booking_id", "unknown"),
-                "amount": amount_dollars,
-                "currency": intent.currency.upper(),
-                "status": "pending",
-                "created_at": datetime.fromtimestamp(intent.created, tz=timezone.utc).isoformat()
-            }
-        )
-
-        return jsonify(
-            {"client_secret": intent.client_secret, "payment_id": intent.id}
-        ), 200
-
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
-
-
 @app.route("/api/payments/verify-intent", methods=["POST"])
 def verify_payment_intent():
     """Verify with Stripe and mark payment as completed."""
