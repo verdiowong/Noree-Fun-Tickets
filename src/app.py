@@ -59,7 +59,7 @@ def healthz():
 #         "user_id": effective_user_id,
 #         "amount": data["amount"],
 #         "currency": data["currency"],
-#         "seats": data.get("seats"),  # Optional
+#         "seat_numbers": data.get("seat_numbers"),  # Optional
 #         # Don't store auth header - worker will use IAM roles
 #     }
 
@@ -204,8 +204,8 @@ def _process_booking(data, user_id, headers):
         "num_tickets": data["num_tickets"],
         "user_id": user_id,
     }
-    if "seats" in data and data["seats"]:
-        booking_data["seats"] = data["seats"]
+    if "seat_numbers" in data and data["seat_numbers"]:
+        booking_data["seat_numbers"] = data["seat_numbers"]
 
     print("Booking URL:", book_url)
     print("Booking data:", booking_data)
