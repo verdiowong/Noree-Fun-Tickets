@@ -25,6 +25,14 @@ sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
 SQS_NOTIFICATIONS_QUEUE_URL = os.environ.get("NOTIFICATIONS_QUEUE_URL")
 
 
+print("\n=== DEBUG ENV LOADING ===")
+print(f"AWS_REGION: {os.environ.get('AWS_REGION')}")
+print(f"SQS_NOTIFICATION_QUEUE_URL: {os.environ.get('SQS_NOTIFICATION_QUEUE_URL')}")
+print(f"NOTIFICATIONS_QUEUE_URL: {os.environ.get('NOTIFICATIONS_QUEUE_URL')}")
+print("==========================\n")
+
+
+
 # Utility function to simulate sending a notification
 def send_notification(notification_type, data):
     # In real usage: integrate with email/SMS/push APIs (e.g., SendGrid, Twilio, Firebase)
