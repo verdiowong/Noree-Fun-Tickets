@@ -409,6 +409,13 @@ def orchestrate_refund(booking_id: str):
 # --- Generic orchestrator (frontend gateway) ---
 @app.post("/api/orchestrator")
 def proxy_to_service():
+    """General-purpose gateway: routes requests to target microservice.
+    Body format: { service, endpoint, method, data }
+    - service: one of [admin, events, bookings, payment, notifications]
+    - endpoint: path beginning with '/'
+    - method: HTTP verb to use when calling target service (default GET)
+    - data: JSON payload for non-GET methods; for GET, sent as query params
+    """
     payload = request.get_json(silent=True) or {}
     service = (payload.get("service") or "").strip().lower()
     endpoint = payload.get("endpoint") or ""
@@ -422,10 +429,11 @@ def proxy_to_service():
         claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
         if err:
             return jsonify({"success": False, "message": err}), 401
+        # Enforce admin-only for admin endpoints when auth is enabled
         if endpoint.startswith("/api/admin"):
             groups = claims.get("cognito:groups") or []
             role_claim = claims.get("role")
-            is_admin = ("ADMIN" in groups) or role_claim == "ADMIN"
+            is_admin = (isinstance(groups, list) and ("ADMIN" in groups)) or role_claim == "ADMIN"
             if not is_admin:
                 return jsonify({"success": False, "message": "Forbidden: admin role required"}), 403
 
@@ -435,12 +443,15 @@ def proxy_to_service():
             "message": "Missing required fields: service, endpoint"
         }), 400
 
+    # Map logical service names to base URLs
     base_url_map = {
         "admin": ADMIN_SERVICE_URL,
         "payment": PAYMENT_SERVICE_URL,
         "notifications": NOTIFICATION_SERVICE_URL,
+        # events and bookings are both served by ticket-booking service
         "events": BOOKING_SERVICE_URL,
         "bookings": BOOKING_SERVICE_URL,
+        # backward-compat aliases
         "booking": BOOKING_SERVICE_URL,
     }
 
@@ -450,22 +461,16 @@ def proxy_to_service():
             "success": False,
             "message": f"Unknown service: {service}"
         }), 400
-    
-    
-    if not endpoint.startswith("/"):
-        endpoint = "/" + endpoint
-    
+
     print("service called:", service)
     print("endpoint called:", endpoint)
     print("method called:", method)
     print("url called:", f"{base}")
     print("target_url called:", f"{base}{endpoint}")
 
-    # --- define json_body first ---
-    params = data if (method == "GET" and isinstance(data, dict)) else None
-    json_body = None if method == "GET" else data
+    if not endpoint.startswith("/"):
+        endpoint = "/" + endpoint
 
-    # --- now normalize it safely ---
     if isinstance(json_body, str):
         try:
             json_body = json.loads(json_body)
@@ -475,14 +480,20 @@ def proxy_to_service():
     target_url = f"{base}{endpoint}"
 
     headers = _auth_headers(request.headers)
+    # Inject user context for downstream services
     if not allow_unauth and _verifier and claims:
         headers["X-User-Id"] = claims.get("sub", "")
         roles = claims.get("cognito:groups") or []
         if isinstance(roles, list):
             headers["X-User-Roles"] = ",".join(roles)
 
+    # For GET, treat data as query params; otherwise send JSON body
+    params = data if (method == "GET" and isinstance(data, dict)) else None
+    json_body = None if method == "GET" else data
+
     res = request_json(method, target_url, headers=headers, json=json_body, params=params)
 
+    # Attempt to pass through JSON response; on non-JSON, wrap as text
     try:
         body = res.json()
     except Exception:
@@ -495,7 +506,6 @@ def proxy_to_service():
         "data": body if success else None,
         "message": None if success else body.get("error") or body.get("message") or "Request failed"
     }), status
-
 
 
 def get_all_cognito_users():
