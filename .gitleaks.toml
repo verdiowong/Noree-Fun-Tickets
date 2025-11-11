@@ -1,23 +1,20 @@
 [allowlist]
   description = "Exclude cache directories and build artifacts"
   paths = [
-    '''.cache''',
-    '''.cache/''',
-    '''.cache/**''',
-    '''**/__pycache__/''',
-    '''**/*.pyc''',
-    '''**/*.pyo''',
-    '''**/*.pyd''',
-    '''.Python''',
-    '''**/pip-log.txt''',
-    '''**/pip-delete-this-directory.txt''',
-    '''**/.pytest_cache/''',
-    '''**/.coverage''',
-    '''**/htmlcov/''',
-    '''**/.tox/''',
-    '''**/.venv/''',
-    '''**/venv/''',
-    '''**/ENV/''',
-    '''**/env/'''
+    '''^\.cache''',
+    '''^\.cache/.*''',
+    '''.*__pycache__/.*''',
+    '''.*\.pyc$''',
+    '''.*\.pyo$''',
+    '''.*\.pyd$''',
+    '''^\.Python$''',
+    '''.*pip-log\.txt$''',
+    '''.*pip-delete-this-directory\.txt$''',
+    '''.*\.pytest_cache/.*''',
+    '''.*\.coverage$''',
+    '''.*htmlcov/.*''',
+    '''.*\.tox/.*''',
+    '''.*\.venv/.*''',
+    '''.*venv/.*'''
   ]
 
