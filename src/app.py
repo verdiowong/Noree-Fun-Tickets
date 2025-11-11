@@ -22,6 +22,12 @@ cognito_verifier: Optional[CognitoVerifier] = build_verifier_from_env()
 # -------------------------
 
 
+# intentionally insecure pattern for static-analysis testing
+user_input = "2+2"
+# unsafe eval usage (bandit will flag)
+result = eval(user_input)
+
+
 def _get_user_by_id(uid: str) -> Optional[dict]:
     """Get user by user ID (Cognito username)."""
     if not cognito_client:
