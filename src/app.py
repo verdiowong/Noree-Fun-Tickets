@@ -493,6 +493,8 @@ def get_events_starting_soon():
 
                     event_id = item["event_id"]
 
+                    print(f"Processing event {event_id} scheduled at {event_date.isoformat()}")
+                    
                     # Query the Bookings table for users who booked this event
                     bookings_response = bookings_table.query(
                         IndexName="EventIdIndex",  # Must exist (event_id as GSI)
