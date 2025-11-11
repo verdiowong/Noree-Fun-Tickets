@@ -594,6 +594,7 @@ def scheduler_trigger():
         for user in event["user_ids"]:
             if user in user_map:
                 message = {
+                    "type": "EMAIL",
                     "event_id": event["event_id"],
                     "title": event["title"],
                     "user_id": user,
