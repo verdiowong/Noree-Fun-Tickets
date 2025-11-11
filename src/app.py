@@ -47,9 +47,9 @@ def orchestrate_booking():
         "num_tickets": data["num_tickets"],
         "user_id": effective_user_id,
     }
-    # Include seats array if provided
-    if "seats" in data:
-        booking_data["seats"] = data["seats"]
+    # Include seat_numbers array if provided
+    if "seat_numbers" in data:
+        booking_data["seat_numbers"] = data["seat_numbers"]
     
     book_res = post_json(book_url, booking_data, headers)
 
@@ -107,9 +107,9 @@ def orchestrate_booking_and_notify():
         "num_tickets": data["num_tickets"],
         "user_id": effective_user_id,
     }
-    # Include seats array if provided
-    if "seats" in data:
-        booking_data["seats"] = data["seats"]
+    # Include seat_numbers array if provided
+    if "seat_numbers" in data:
+        booking_data["seat_numbers"] = data["seat_numbers"]
     
     book_res = post_json(book_url, booking_data, headers)
     if book_res.status_code >= 400:
