@@ -10,7 +10,7 @@ from flask import Flask, request, jsonify
 from twilio.rest import Client
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
-from datetime import datetime
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
@@ -71,7 +71,7 @@ def send_email():
                 "type": "EMAIL",
                 "message": data["message"],
                 "status": "SENT",
-                "created_at": datetime.now(datetime.UTC).isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             }
         )
         return jsonify({"message": "Email sent successfully"}), 200
@@ -103,7 +103,7 @@ def send_sms():
             "type": "SMS",
             "message": data["message"],
             "status": "SENT",
-            "created_at": datetime.now(datetime.UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
     )
 
@@ -137,7 +137,7 @@ def send_push():
             "type": "PUSH",
             "message": data["message"],
             "status": "SENT",
-            "created_at": datetime.now(datetime.UTC).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
     )
 
@@ -213,7 +213,7 @@ def set_reminder():
             "message": data["message"],
             "status": data["status"],
             "reminder_time": data["reminder_time"],
-            "created_at": datetime.now(datetime.UTC).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "hide": data["hide"]
         }
     )
@@ -286,7 +286,7 @@ def send_email_from_queue(body):
                     "type": "EMAIL",
                     "message": message,
                     "status": "SENT",
-                    "created_at": datetime.now(datetime.UTC).isoformat()
+                    "created_at": datetime.now(timezone.utc).isoformat()
                 }
             )
         else:
@@ -321,7 +321,7 @@ def send_sms_from_queue(body):
                 "type": "SMS",
                 "message": message_text,
                 "status": "SENT",
-                "created_at": datetime.now(datetime.UTC).isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             }
         )
 
