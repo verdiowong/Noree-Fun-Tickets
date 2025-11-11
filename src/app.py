@@ -203,6 +203,7 @@ def _process_booking(data, user_id, headers):
     booking_data = {
         "num_tickets": data["num_tickets"],
         "user_id": user_id,
+        "status": data["status"]
     }
     if "seat_numbers" in data and data["seat_numbers"]:
         booking_data["seat_numbers"] = data["seat_numbers"]
