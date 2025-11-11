@@ -162,32 +162,32 @@ class Booking:
 
 
 # Auth decorators
-def require_admin(f):
-    def wrapper(*args, **kwargs):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            return jsonify({"error": "Unauthorized"}), 401
-        if "admin" not in auth_header.lower():
-            return jsonify({"error": "Forbidden"}), 403
-        return f(*args, **kwargs)
+# def require_admin(f):
+#     def wrapper(*args, **kwargs):
+#         auth_header = request.headers.get("Authorization")
+#         if not auth_header:
+#             return jsonify({"error": "Unauthorized"}), 401
+#         if "admin" not in auth_header.lower():
+#             return jsonify({"error": "Forbidden"}), 403
+#         return f(*args, **kwargs)
 
-    wrapper.__name__ = f.__name__
-    return wrapper
+#     wrapper.__name__ = f.__name__
+#     return wrapper
 
 
-def require_auth(f):
-    def wrapper(*args, **kwargs):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'error': 'Unauthorized'}), 401
-        return f(*args, **kwargs)
-    wrapper.__name__ = f.__name__
-    return wrapper
+# def require_auth(f):
+#     def wrapper(*args, **kwargs):
+#         auth_header = request.headers.get('Authorization')
+#         if not auth_header:
+#             return jsonify({'error': 'Unauthorized'}), 401
+#         return f(*args, **kwargs)
+#     wrapper.__name__ = f.__name__
+#     return wrapper
 
 
 # Admin Routes
 @app.route('/api/admin/events', methods=['POST'])
-@require_admin
+# @require_admin
 def create_event():
     data = request.get_json()
 
@@ -218,7 +218,7 @@ def create_event():
 
 
 @app.route('/api/admin/events/<event_id>', methods=['GET'])
-@require_admin
+# @require_admin
 def get_event_admin(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
@@ -233,7 +233,7 @@ def get_event_admin(event_id):
 
 
 @app.route('/api/admin/events', methods=['GET'])
-@require_admin
+# @require_admin
 def get_all_events_admin():
     response = events_table.scan()
     events = [Event.from_dict(item).to_dict()
@@ -242,7 +242,7 @@ def get_all_events_admin():
 
 
 @app.route('/api/admin/events/<event_id>', methods=['PUT'])
-@require_admin
+# @require_admin
 def update_event(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
@@ -274,7 +274,7 @@ def update_event(event_id):
 
 
 @app.route('/api/admin/events/<event_id>', methods=['DELETE'])
-@require_admin
+# @require_admin
 def delete_event(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
@@ -290,7 +290,7 @@ def delete_event(event_id):
 
 # User Routes
 @app.route('/api/events', methods=['GET'])
-@require_auth
+# @require_auth
 def get_all_events():
     response = events_table.scan()
     events = [Event.from_dict(item).to_dict() for item in response['Items']]
@@ -298,7 +298,7 @@ def get_all_events():
 
 
 @app.route('/api/events/<event_id>', methods=['GET'])
-@require_auth
+# @require_auth
 def get_event(event_id):
     # Ensure event_id is string
     event_id = str(event_id)
@@ -314,7 +314,7 @@ def get_event(event_id):
 
 # Book an event as user
 @app.route('/api/events/<event_id>/book', methods=['POST'])
-@require_auth
+# @require_auth
 def book_event(event_id):
     """
     Race-condition-free booking using DynamoDB atomic operations.
