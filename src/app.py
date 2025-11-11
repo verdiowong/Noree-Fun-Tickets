@@ -479,12 +479,14 @@ def get_events_starting_soon():
         response = events_table.scan()
         items = response.get("Items", [])
 
+        print("Fetched events from DynamoDB:", items)
+
         upcoming_events = []
 
         for item in items:
             try:
                 event_date = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
-                
+
                 print(f"Event {item['event_id']} date: {event_date.isoformat()}")
 
                 # Check if event_date is within ±5 minutes of (now + 3h)
