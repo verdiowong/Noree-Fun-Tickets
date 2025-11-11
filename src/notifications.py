@@ -301,6 +301,9 @@ def poll_sqs_messages():
                 WaitTimeSeconds=15
             )
 
+            print("[DEBUG] SQS raw response:", response)
+
+
             messages = response.get("Messages", [])
             if not messages:
                 print("[SQS] No messages, sleeping...")
@@ -334,6 +337,7 @@ def poll_sqs_messages():
         except Exception as e:
             print(f"[ERROR] SQS polling error: {e}")
             time.sleep(5)
+        print(f"[DEBUG] Polling exception: {e}")
 
 
 @app.get("/health")
