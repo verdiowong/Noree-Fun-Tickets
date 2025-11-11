@@ -613,7 +613,7 @@ def scheduler_trigger():
                     "title": event["title"],
                     "user_id": user,
                     "email": user_map[user],
-                    "message": f"Reminder: {event['title']} starts in 3 hours!"
+                    "message": f"Reminder: {event['title']} starts soon!"
                 }
                 enqueue_notifications(message)
     return jsonify({"status": "queued"}), 200
