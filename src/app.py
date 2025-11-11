@@ -544,7 +544,7 @@ def get_events_starting_soon():
         events_url = f"{BOOKING_SERVICE_URL}/api/events/starting-soon"
 
         # Use the same internal helper you use for other services
-        res = request_json("GET", events_url)
+        res = request_json("GET", events_url, headers={})
 
         if res.status_code >= 400:
             print(f"[ERROR] Booking service returned {res.status_code}: {res.text}")
