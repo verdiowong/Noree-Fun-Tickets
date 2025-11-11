@@ -21,7 +21,7 @@ _verifier = build_verifier_from_env()
 
 # Intialize Cognito client 
 cognito = boto3.client("cognito-idp", region_name=AWS_REGION)
-cognito_pool_id = os.environ.get("COGNITO_USER_POOL_ID")
+cognito_pool_id = os.environ.get("COGNITO_USER_POOL_ID_")
 
 # Initialize SQS client
 sqs = boto3.client('sqs', region_name=AWS_REGION)
