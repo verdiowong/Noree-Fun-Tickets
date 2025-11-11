@@ -1,6 +1,12 @@
+import json
+import uuid
+import boto3
 from flask import Flask, jsonify, request
-from flask_cors import CORS
-from config import ADMIN_SERVICE_URL, BOOKING_SERVICE_URL, PAYMENT_SERVICE_URL, NOTIFICATION_SERVICE_URL
+from flask_cors import CORS, cross_origin
+from config import (
+    ADMIN_SERVICE_URL, BOOKING_SERVICE_URL, PAYMENT_SERVICE_URL, 
+    NOTIFICATION_SERVICE_URL, SQS_QUEUE_URL, AWS_REGION
+)
 from clients import post_json, _auth_headers, request_json
 from auth import build_verifier_from_env
 
@@ -8,6 +14,9 @@ from auth import build_verifier_from_env
 app = Flask(__name__)
 CORS(app)
 _verifier = build_verifier_from_env()
+
+# Initialize SQS client
+sqs = boto3.client('sqs', region_name=AWS_REGION)
 
 
 @app.get("/healthz")
@@ -20,12 +29,155 @@ def healthz():
     }), 200
 
 
+# @app.post("/api/orch/bookings")
+# def orchestrate_booking():
+#     """
+#     Enqueue booking request to SQS FIFO for FCFS processing.
+#     Returns a request_id that can be used to check status.
+#     """
+#     # Auth check
+#     claims = None
+#     if _verifier:
+#         claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
+#         if err:
+#             return jsonify({"error": {"code": "UNAUTHORIZED", "message": err}}), 401
+
+#     data = request.get_json() or {}
+#     for f in ("event_id", "num_tickets", "user_id", "amount", "currency"):
+#         if f not in data:
+#             return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
+
+#     # Generate unique request ID
+#     request_id = str(uuid.uuid4())
+#     effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
+    
+#     # Prepare message for SQS
+#     message_body = {
+#         "request_id": request_id,
+#         "event_id": data["event_id"],
+#         "num_tickets": data["num_tickets"],
+#         "user_id": effective_user_id,
+#         "amount": data["amount"],
+#         "currency": data["currency"],
+#         "seats": data.get("seats"),  # Optional
+#         # Don't store auth header - worker will use IAM roles
+#     }
+
+#     try:
+#         # Send message to SQS FIFO
+#         # CRITICAL: MessageGroupId and MessageDeduplicationId are REQUIRED for FIFO
+#         response = sqs.send_message(
+#             QueueUrl=SQS_QUEUE_URL,
+#             MessageBody=json.dumps(message_body),
+#             MessageGroupId=str(data["event_id"]),  # REQUIRED: Ensures FCFS per event
+#             MessageDeduplicationId=request_id,  # REQUIRED: Prevents duplicates
+#             MessageAttributes={
+#                 'RequestId': {
+#                     'DataType': 'String',
+#                     'StringValue': request_id
+#                 },
+#                 'EventId': {
+#                     'DataType': 'String',
+#                     'StringValue': str(data["event_id"])
+#                 },
+#                 'UserId': {
+#                     'DataType': 'String',
+#                     'StringValue': str(effective_user_id)
+#                 }
+#             }
+#         )
+        
+#         return jsonify({
+#             "request_id": request_id,
+#             "status": "queued",
+#             "message": "Booking request has been queued for processing",
+#             "sqs_message_id": response.get('MessageId')
+#         }), 202  # 202 Accepted
+        
+#     except Exception as e:
+#         print(f"SQS Error: {str(e)}")
+#         return jsonify({
+#             "error": {
+#                 "code": "QUEUE_ERROR",
+#                 "message": f"Failed to queue booking: {str(e)}"
+#             }
+#         }), 500
+
+
+@app.get("/api/orch/bookings/status/<request_id>")
+def check_booking_status(request_id: str):
+    """
+    Check the status of a queued booking request from DynamoDB.
+    """
+    from decimal import Decimal
+    from botocore.exceptions import ClientError
+    
+    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+    status_table = dynamodb.Table('booking-requests-status')
+    
+    try:
+        response = status_table.get_item(Key={'request_id': request_id})
+        
+        if 'Item' not in response:
+            return jsonify({
+                "request_id": request_id,
+                "status": "not_found",
+                "message": "Request not found. It may still be queued or the worker hasn't processed it yet."
+            }), 404
+        
+        item = response['Item']
+        
+        # Convert Decimal to float for JSON
+        def convert_decimals(obj):
+            if isinstance(obj, Decimal):
+                return float(obj) if obj % 1 else int(obj)
+            if isinstance(obj, dict):
+                return {k: convert_decimals(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [convert_decimals(i) for i in obj]
+            return obj
+        
+        return jsonify({
+            "request_id": request_id,
+            "status": item.get('status'),
+            "data": convert_decimals(item.get('data', {})),
+            "updated_at": item.get('updated_at')
+        }), 200
+        
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', '')
+        if error_code == 'ResourceNotFoundException':
+            # Table doesn't exist yet - return a helpful message
+            return jsonify({
+                "request_id": request_id,
+                "status": "table_not_created",
+                "message": "Status table not created yet. Run create_status_table.py to create it."
+            }), 503  # Service Unavailable
+        else:
+            print(f"Error checking status: {str(e)}")
+            return jsonify({
+                "error": {
+                    "code": "STATUS_ERROR",
+                    "message": str(e)
+                }
+            }), 500
+    except Exception as e:
+        print(f"Error checking status: {str(e)}")
+        return jsonify({
+            "error": {
+                "code": "STATUS_ERROR",
+                "message": str(e)
+            }
+        }), 500
+
+
 @app.post("/api/orch/bookings")
-def orchestrate_booking():
-    """Coordinate a booking flow: validate input, create a booking in
-    ticket-booking, then create a Stripe payment intent via the payment
-    service and return both payloads to the client."""
-    # Dev mode: If Cognito is not configured, skip JWT enforcement
+def orchestrate_booking_sync():
+    """
+    Synchronous booking endpoint (original implementation).
+    Use this for testing or immediate processing.
+    """
+    print("Synchronous booking endpoint called")
     claims = None
     if _verifier:
         claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
@@ -38,21 +190,28 @@ def orchestrate_booking():
             return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
 
     headers = _auth_headers(request.headers)
+    effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
+    
+    # Process booking immediately (original logic)
+    return _process_booking(data, effective_user_id, headers)
 
+
+def _process_booking(data, user_id, headers):
+    """Internal function to process a booking (used by sync endpoint and worker)."""
     # 1) Create booking
     book_url = f"{BOOKING_SERVICE_URL}/api/events/{data['event_id']}/book"
-    # Use token subject when available; otherwise fall back to client value (dev)
-    effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
     booking_data = {
         "num_tickets": data["num_tickets"],
-        "user_id": effective_user_id,
+        "user_id": user_id,
     }
-    # Include seat_numbers array if provided
-    if "seat_numbers" in data:
-        booking_data["seat_numbers"] = data["seat_numbers"]
+    if "seats" in data and data["seats"]:
+        booking_data["seats"] = data["seats"]
+
+    print("Booking URL:", book_url)
+    print("Booking data:", booking_data)
+    print("Headers:", headers)
     
     book_res = post_json(book_url, booking_data, headers)
-
     if book_res.status_code >= 400:
         return jsonify({"error": {"code": "BOOKING_FAILED", "message": book_res.text}}), 400
 
@@ -70,11 +229,30 @@ def orchestrate_booking():
         "currency": data["currency"],
     }, headers)
 
+    print("PAYMENT URL:", pay_url)
+    print("PAYMENT REQUEST:", {
+        "booking_id": booking_id,
+        "amount": data["amount"],
+        "currency": data["currency"],
+    })
+    print("PAYMENT RESPONSE:", pay_res.status_code, pay_res.text)
+
+
     if pay_res.status_code >= 400:
         return jsonify({"error": {"code": "PAYMENT_INTENT_FAILED", "message": pay_res.text}}), 400
 
     payment = pay_res.json()
-    return jsonify({"booking": booking, "payment": payment}), 201
+    print("PAYMENT SERVICE RESPONSE JSON:", payment)
+    return jsonify({
+        "success": True,
+        "booking": booking,
+        "payment": {
+        "payment_id": payment.get("payment_id") or payment.get("paymentId"),
+        "client_secret": payment.get("client_secret") or payment.get("clientSecret"),
+            "amount": payment.get("amount"),
+            "currency": payment.get("currency")
+        }
+    }), 201
 
 
 @app.post("/api/orch/bookings/notify")
@@ -167,21 +345,43 @@ def orchestrate_booking_and_notify():
         resp["warnings"] = warnings
     return jsonify(resp), 201
 
+
 @app.post("/api/orch/payments/confirm")
+@cross_origin(
+    origins=["https://main.d1j4ffe4p8np66.amplifyapp.com"],
+    methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"]
+)
 def orchestrate_payment_confirm():
     """Confirm a pending payment by forwarding to the payment service.
-    Expects a Stripe test PaymentMethod id (e.g. pm_card_visa)."""
+    Verifies the payment intent with Stripe."""
     data = request.get_json() or {}
-    for f in ("payment_id", "stripe_token"):
+    for f in ("payment_id", "booking_id"):
         if f not in data:
             return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
 
     headers = _auth_headers(request.headers)
-    url = f"{PAYMENT_SERVICE_URL}/api/payments/confirm"
-    res = post_json(url, {"payment_id": data["payment_id"], "stripe_token": data["stripe_token"]}, headers)
+    url = f"{PAYMENT_SERVICE_URL}/api/payments/verify-intent"
+    res = post_json(url, {"payment_id": data["payment_id"], "booking_id": data["booking_id"]}, headers)
     if res.status_code >= 400:
         return jsonify({"error": {"code": "PAYMENT_CONFIRM_FAILED", "message": res.text}}), 400
     return jsonify(res.json()), 200
+
+# @app.post("/api/orch/payments/confirm")
+# def orchestrate_payment_confirm():
+#     """Confirm a pending payment by forwarding to the payment service.
+#     Expects a Stripe test PaymentMethod id (e.g. pm_card_visa)."""
+#     data = request.get_json() or {}
+#     for f in ("payment_id", "stripe_token"):
+#         if f not in data:
+#             return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
+
+#     headers = _auth_headers(request.headers)
+#     url = f"{PAYMENT_SERVICE_URL}/api/payments/confirm"
+#     res = post_json(url, {"payment_id": data["payment_id"], "stripe_token": data["stripe_token"]}, headers)
+#     if res.status_code >= 400:
+#         return jsonify({"error": {"code": "PAYMENT_CONFIRM_FAILED", "message": res.text}}), 400
+#     return jsonify(res.json()), 200
 
 
 @app.post("/api/orch/payments/refund/<booking_id>")
@@ -307,7 +507,7 @@ def scheduler_trigger():
     # Example below just pings the booking service health endpoint:
     try:
         health_url = f"{BOOKING_SERVICE_URL}/healthz"
-        res = request_json("GET", health_url)
+        res = request_json("GET", health_url, headers={})
         print("Booking service health:", res.status_code)
     except Exception as e:
         print("Health check failed:", e)
