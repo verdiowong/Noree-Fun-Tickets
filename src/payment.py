@@ -33,7 +33,6 @@ app = Flask(__name__)
 CORS(app)
 
 
-
 def get_payment_intent_id(booking_id: str):
     """Fetch the Stripe payment_intent_id for a booking from DynamoDB."""
     try:
@@ -53,6 +52,7 @@ def get_payment_intent_id(booking_id: str):
 def health_check():
     """Simple health endpoint."""
     return jsonify({"status": "Payment service is healthy"}), 200
+
 
 @app.route("/api/payments/create-intent", methods=["POST"])
 def create_payment_intent():
@@ -82,7 +82,8 @@ def create_payment_intent():
                 "amount": amount_dollars,
                 "currency": intent.currency.upper(),
                 "status": "pending",
-                "created_at": datetime.fromtimestamp(intent.created, tz=timezone.utc).isoformat()
+                "created_at": datetime.fromtimestamp(
+                    intent.created, tz=timezone.utc).isoformat()
             }
         )
 
