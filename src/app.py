@@ -488,8 +488,9 @@ def get_events_starting_soon():
 
                 # Convert both timezone-naive and timezone-aware dates safely
                 if "Z" in raw_date or "+" in raw_date:
-                    event_date = datetime.fromisoformat(raw_date
-                                                        .replace("Z", "+00:00"))
+                    event_date = datetime.fromisoformat(
+                        raw_date.replace("Z", "+00:00")
+                    )
                 else:
                     # assume UTC if no timezone is present
                     event_date = datetime.fromisoformat(
