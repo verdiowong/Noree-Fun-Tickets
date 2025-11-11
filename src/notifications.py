@@ -343,7 +343,8 @@ def healthz():
     }), 200
 
 
+threading.Thread(target=poll_sqs_messages, daemon=True).start()
 
 if __name__ == "__main__":
-    threading.Thread(target=poll_sqs_messages, daemon=True).start()
+
     app.run(debug=True, host="0.0.0.0", port=8082)
