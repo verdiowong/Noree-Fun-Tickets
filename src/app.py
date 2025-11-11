@@ -37,80 +37,71 @@ def healthz():
     }), 200
 
 
-# @app.post("/api/orch/bookings")
-# def orchestrate_booking():
-#     """
-#     Enqueue booking request to SQS FIFO for FCFS processing.
-#     Returns a request_id that can be used to check status.
-#     """
-#     # Auth check
-#     claims = None
-#     if _verifier:
-#         claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
-#         if err:
-#             return jsonify({"error": {"code": "UNAUTHORIZED", "message": err}}), 401
 
-#     data = request.get_json() or {}
-#     for f in ("event_id", "num_tickets", "user_id", "amount", "currency"):
-#         if f not in data:
-#             return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
 
-#     # Generate unique request ID
-#     request_id = str(uuid.uuid4())
-#     effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
+@app.post("/api/orch/bookings/async")
+def orchestrate_booking_async():
+    """
+    Enqueue booking request to SQS FIFO for FCFS processing.
+    Returns a request_id that can be used to check status.
+    """
+    # Auth check
+    claims = None
+    if _verifier:
+        claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
+        if err:
+            return jsonify({"error": {"code": "UNAUTHORIZED", "message": err}}), 401
+
+    data = request.get_json() or {}
+    for f in ("event_id", "num_tickets", "user_id", "amount", "currency"):
+        if f not in data:
+            return jsonify({"error": {"code": "BAD_REQUEST", "message": f"Missing {f}"}}), 400
+
+    # Generate unique request ID
+    request_id = str(uuid.uuid4())
+    effective_user_id = (claims or {}).get("sub") if claims else data.get("user_id")
     
-#     # Prepare message for SQS
-#     message_body = {
-#         "request_id": request_id,
-#         "event_id": data["event_id"],
-#         "num_tickets": data["num_tickets"],
-#         "user_id": effective_user_id,
-#         "amount": data["amount"],
-#         "currency": data["currency"],
-#         "seat_numbers": data.get("seat_numbers"),  # Optional
-#         # Don't store auth header - worker will use IAM roles
-#     }
+    # Prepare message for SQS
+    message_body = {
+        "request_id": request_id,
+        "event_id": data["event_id"],
+        "num_tickets": data["num_tickets"],
+        "user_id": effective_user_id,
+        "amount": data["amount"],
+        "currency": data["currency"],
+        "seat_numbers": data.get("seat_numbers"),
+    }
 
-#     try:
-#         # Send message to SQS FIFO
-#         # CRITICAL: MessageGroupId and MessageDeduplicationId are REQUIRED for FIFO
-#         response = sqs.send_message(
-#             QueueUrl=SQS_QUEUE_URL,
-#             MessageBody=json.dumps(message_body),
-#             MessageGroupId=str(data["event_id"]),  # REQUIRED: Ensures FCFS per event
-#             MessageDeduplicationId=request_id,  # REQUIRED: Prevents duplicates
-#             MessageAttributes={
-#                 'RequestId': {
-#                     'DataType': 'String',
-#                     'StringValue': request_id
-#                 },
-#                 'EventId': {
-#                     'DataType': 'String',
-#                     'StringValue': str(data["event_id"])
-#                 },
-#                 'UserId': {
-#                     'DataType': 'String',
-#                     'StringValue': str(effective_user_id)
-#                 }
-#             }
-#         )
+    try:
+        # Send message to SQS FIFO
+        # CRITICAL: MessageGroupId and MessageDeduplicationId are REQUIRED for FIFO
+        response = sqs.send_message(
+            QueueUrl=SQS_QUEUE_URL,
+            MessageBody=json.dumps(message_body),
+            MessageGroupId=str(data["event_id"]),  # Ensures FCFS per event
+            MessageDeduplicationId=request_id,     # Prevents duplicates
+            MessageAttributes={
+                'RequestId': {'DataType': 'String','StringValue': request_id},
+                'EventId': {'DataType': 'String','StringValue': str(data["event_id"])},
+                'UserId': {'DataType': 'String','StringValue': str(effective_user_id)}
+            }
+        )
         
-#         return jsonify({
-#             "request_id": request_id,
-#             "status": "queued",
-#             "message": "Booking request has been queued for processing",
-#             "sqs_message_id": response.get('MessageId')
-#         }), 202  # 202 Accepted
+        return jsonify({
+            "request_id": request_id,
+            "status": "queued",
+            "message": "Booking request has been queued for processing",
+            "sqs_message_id": response.get('MessageId')
+        }), 202  # 202 Accepted
         
-#     except Exception as e:
-#         print(f"SQS Error: {str(e)}")
-#         return jsonify({
-#             "error": {
-#                 "code": "QUEUE_ERROR",
-#                 "message": f"Failed to queue booking: {str(e)}"
-#             }
-#         }), 500
-
+    except Exception as e:
+        print(f"SQS Error: {str(e)}")
+        return jsonify({
+            "error": {
+                "code": "QUEUE_ERROR",
+                "message": f"Failed to queue booking: {str(e)}"
+            }
+        }), 500
 
 @app.get("/api/orch/bookings/status/<request_id>")
 def check_booking_status(request_id: str):
@@ -211,8 +202,9 @@ def _process_booking(data, user_id, headers):
     booking_data = {
         "num_tickets": data["num_tickets"],
         "user_id": user_id,
-        "status": data["status"]
     }
+    if "status" in data:
+        booking_data["status"] = data["status"]
     if "seat_numbers" in data and data["seat_numbers"]:
         booking_data["seat_numbers"] = data["seat_numbers"]
 
