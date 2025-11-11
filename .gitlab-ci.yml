@@ -1,7 +1,7 @@
 stages:
   # - Security
   # - Static Analysis
-#   - Test
+  - Test
   - Release
   - Deploy
 
@@ -34,15 +34,18 @@ stages:
 #       - pylint_report.txt
 
 
-# integration-tests:
-#   stage: Test
-#   image: docker:28.3.2
-#   services:
-#     - docker:28.3.2-dind
-#   before_script:
-#     - docker info
-#   script:
-#     - docker compose -f ci/compose.test.yaml up --exit-code-from games-pytest
+integration-tests:
+  stage: Test
+  image: docker:28.3.2
+  services:
+    - docker:28.3.2-dind
+  before_script:
+    - docker info
+  script:
+    - docker compose -f ci/compose.test.yaml up --exit-code-from payment-pytest
+  after_script:
+    - docker compose -f ci/compose.test.yaml down -v
+
 
 # "Security: Secrets (gitleaks)":
 #   stage: Security
