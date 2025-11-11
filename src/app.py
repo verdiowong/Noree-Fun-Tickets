@@ -227,9 +227,17 @@ def orchestrate_booking_fifo_hybrid():
         return booking_result
     
     # Step 2: Extract booking and payment info from response
-    booking_response = response_obj.get_json()
-    booking_id = booking_response.get("booking", {}).get("booking_id")
-    payment_id = booking_response.get("payment", {}).get("payment_id")
+    # Parse JSON from response data (Flask Response objects don't have get_json())
+    try:
+        response_data = response_obj.get_data(as_text=True)
+        booking_response = json.loads(response_data)
+        booking_id = booking_response.get("booking", {}).get("booking_id")
+        payment_id = booking_response.get("payment", {}).get("payment_id")
+    except Exception as e:
+        # If we can't parse the response, log but continue (SQS audit is optional)
+        print(f"[WARN] Failed to parse booking response for SQS audit: {str(e)}")
+        booking_id = None
+        payment_id = None
     
     # Step 3: Send to SQS FIFO for ordering/auditing/post-processing (non-blocking)
     request_id = str(uuid.uuid4())
