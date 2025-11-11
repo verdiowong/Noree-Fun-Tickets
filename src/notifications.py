@@ -22,7 +22,7 @@ dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 table_notifications = dynamodb.Table("notifications")
 table_notification_reminders = dynamodb.Table("notifications_reminder")
 sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION"))
-SQS_NOTIFICATIONS_QUEUE_URL = os.environ.get("SQS_NOTIFICATION_QUEUE_URL")
+SQS_NOTIFICATIONS_QUEUE_URL = os.environ.get("NOTIFICATIONS_QUEUE_URL")
 
 
 # Utility function to simulate sending a notification
