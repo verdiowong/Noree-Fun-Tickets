@@ -26,7 +26,7 @@ variables:
     entrypoint: [""]
   before_script: []
   script:
-    - gitleaks detect --source . --no-git --no-banner --report-format json --report-path gitleaks.json
+    - gitleaks detect --source . --no-git --no-banner --config .gitleaks.toml --report-format json --report-path gitleaks.json
   artifacts:
     when: always
     paths:
