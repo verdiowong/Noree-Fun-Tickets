@@ -10,8 +10,21 @@ import boto3
 
 AWS_REGION = os.environ.get("AWS_REGION")
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
+DYNAMODB_ENDPOINT = os.environ.get("DYNAMODB_ENDPOINT")
 
-dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+# Use local DynamoDB if endpoint provided (for tests)
+if DYNAMODB_ENDPOINT:
+    print(f"[INFO] Using custom DynamoDB endpoint: {DYNAMODB_ENDPOINT}")
+    dynamodb = boto3.resource(
+        "dynamodb",
+        region_name=AWS_REGION,
+        endpoint_url=DYNAMODB_ENDPOINT,
+        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "dummy"),
+        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "dummy"),
+    )
+else:
+    print("[INFO] Using AWS-hosted DynamoDB")
+    dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
 table = dynamodb.Table("payments")
 
 stripe.api_key = STRIPE_SECRET_KEY
@@ -40,6 +53,45 @@ def get_payment_intent_id(booking_id: str):
 def health_check():
     """Simple health endpoint."""
     return jsonify({"status": "Payment service is healthy"}), 200
+
+@app.route("/api/payments/create-intent", methods=["POST"])
+def create_payment_intent():
+    """Create a Stripe PaymentIntent and store a pending record."""
+    data = request.get_json()
+    required_fields = ["booking_id", "amount", "currency"]
+
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=int(float(data["amount"]) * 100),
+            currency=data["currency"],
+            payment_method_types=["card"],
+            metadata={"booking_id": data["booking_id"]},
+        )
+
+        # Store initial payment record in DynamoDB
+        # Note: booking_id is the partition key for easy lookup
+
+        amount_dollars = Decimal(intent.amount) / Decimal(100)
+        table.put_item(
+            Item={
+                "payment_id": intent.id,
+                "booking_id": intent.metadata.get("booking_id", "unknown"),
+                "amount": amount_dollars,
+                "currency": intent.currency.upper(),
+                "status": "pending",
+                "created_at": datetime.fromtimestamp(intent.created, tz=timezone.utc).isoformat()
+            }
+        )
+
+        return jsonify(
+            {"client_secret": intent.client_secret, "payment_id": intent.id}
+        ), 200
+
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/api/payments/verify-intent", methods=["POST"])
