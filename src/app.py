@@ -65,7 +65,7 @@ def healthz():
 #         "user_id": effective_user_id,
 #         "amount": data["amount"],
 #         "currency": data["currency"],
-#         "seats": data.get("seats"),  # Optional
+#         "seat_numbers": data.get("seat_numbers"),  # Optional
 #         # Don't store auth header - worker will use IAM roles
 #     }
 
@@ -209,9 +209,10 @@ def _process_booking(data, user_id, headers):
     booking_data = {
         "num_tickets": data["num_tickets"],
         "user_id": user_id,
+        "status": data["status"]
     }
-    if "seats" in data and data["seats"]:
-        booking_data["seats"] = data["seats"]
+    if "seat_numbers" in data and data["seat_numbers"]:
+        booking_data["seat_numbers"] = data["seat_numbers"]
 
     print("Booking URL:", book_url)
     print("Booking data:", booking_data)
@@ -291,9 +292,9 @@ def orchestrate_booking_and_notify():
         "num_tickets": data["num_tickets"],
         "user_id": effective_user_id,
     }
-    # Include seats array if provided
-    if "seats" in data:
-        booking_data["seats"] = data["seats"]
+    # Include seat_numbers array if provided
+    if "seat_numbers" in data:
+        booking_data["seat_numbers"] = data["seat_numbers"]
     
     book_res = post_json(book_url, booking_data, headers)
     if book_res.status_code >= 400:
