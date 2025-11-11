@@ -18,6 +18,7 @@ app = Flask(__name__)
 CORS(app)
 _verifier = build_verifier_from_env()
 
+
 # Intialize Cognito client 
 cognito = boto3.client("cognito-idp", region_name=AWS_REGION)
 
@@ -499,24 +500,17 @@ def proxy_to_service():
         "message": None if success else body.get("error") or body.get("message") or "Request failed"
     }), status
 
-import boto3
-import os
-
-COGNITO_USER_POOL_ID = os.environ["COGNITO_USER_POOL_ID"]
-REGION = os.environ.get("AWS_REGION", "ap-southeast-1")
-
-cognito_client = boto3.client("cognito-idp", region_name=REGION)
 
 def get_all_cognito_users():
     users = []
     pagination_token = None
 
     while True:
-        params = {"UserPoolId": COGNITO_USER_POOL_ID}
+        params = {"UserPoolId": _verifier.user_pool_id}
         if pagination_token:
             params["PaginationToken"] = pagination_token
 
-        response = cognito_client.list_users(**params)
+        response = cognito.list_users(**params)
         users.extend(response.get("Users", []))
 
         pagination_token = response.get("PaginationToken")
