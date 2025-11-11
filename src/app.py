@@ -312,36 +312,6 @@ def get_event(event_id):
     return jsonify(event.to_dict()), 200
 
 
-@app.route('/api/events/book/<booking_id>', methods=['PATCH'])
-def update_booking(booking_id):
-    data = request.get_json()
-    update_expression = "SET "
-    expression_attribute_values = {}
-    first = True
-
-    for key, value in data.items():
-        if not first:
-            update_expression += ", "
-        update_expression += f"{key} = :{key}"
-        expression_attribute_values[f":{key}"] = value
-        first = False
-
-    try:
-        bookings_table.update_item(
-            Key={"booking_id": booking_id},
-            UpdateExpression=update_expression,
-            ExpressionAttributeValues=expression_attribute_values
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    response = {
-        "booking_id": booking_id,
-        "updated_fields": data
-    }
-    return jsonify(response), 200
-
-
 # Book an event as user
 @app.route('/api/events/<event_id>/book', methods=['POST'])
 @require_auth
@@ -448,6 +418,37 @@ def get_booking(booking_id):
 
     booking = Booking.from_dict(response["Item"])
     return jsonify(booking.to_dict()), 200
+
+
+@app.route('/api/bookings/<booking_id>', methods=['PATCH'])
+def update_booking(booking_id):
+    data = request.get_json()
+    update_expression = "SET "
+    expression_attribute_values = {}
+    first = True
+
+    for key, value in data.items():
+        if not first:
+            update_expression += ", "
+        update_expression += f"{key} = :{key}"
+        expression_attribute_values[f":{key}"] = value
+        first = False
+
+    try:
+        bookings_table.update_item(
+            Key={"booking_id": booking_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeValues=expression_attribute_values
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    response = {
+        "booking_id": booking_id,
+        "updated_fields": data
+    }
+    return jsonify(response), 200
+
 
 
 @app.route("/api/events/starting-soon", methods=["GET"])
