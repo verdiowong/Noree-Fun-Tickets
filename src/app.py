@@ -1,11 +1,14 @@
 import json
 import uuid
 import boto3
+import os
+from datetime import datetime, timedelta, timezone
 from flask import Flask, jsonify, request
 from flask_cors import CORS, cross_origin
 from config import (
     ADMIN_SERVICE_URL, BOOKING_SERVICE_URL, PAYMENT_SERVICE_URL, 
-    NOTIFICATION_SERVICE_URL, SQS_QUEUE_URL, AWS_REGION
+    NOTIFICATION_SERVICE_URL, SQS_QUEUE_URL, SQS_NOTIFICATION_QUEUE_URL,
+    AWS_REGION,
 )
 from clients import post_json, _auth_headers, request_json
 from auth import build_verifier_from_env
@@ -14,6 +17,9 @@ from auth import build_verifier_from_env
 app = Flask(__name__)
 CORS(app)
 _verifier = build_verifier_from_env()
+
+# Intialize Cognito client 
+cognito = boto3.client("cognito-idp", region_name=AWS_REGION)
 
 # Initialize SQS client
 sqs = boto3.client('sqs', region_name=AWS_REGION)
@@ -492,27 +498,114 @@ def proxy_to_service():
         "message": None if success else body.get("error") or body.get("message") or "Request failed"
     }), status
 
+import boto3
+import os
 
+COGNITO_USER_POOL_ID = os.environ["COGNITO_USER_POOL_ID"]
+REGION = os.environ.get("AWS_REGION", "ap-southeast-1")
+
+cognito_client = boto3.client("cognito-idp", region_name=REGION)
+
+def get_all_cognito_users():
+    users = []
+    pagination_token = None
+
+    while True:
+        params = {"UserPoolId": COGNITO_USER_POOL_ID}
+        if pagination_token:
+            params["PaginationToken"] = pagination_token
+
+        response = cognito_client.list_users(**params)
+        users.extend(response.get("Users", []))
+
+        pagination_token = response.get("PaginationToken")
+        if not pagination_token:
+            break
+
+    formatted = []
+    for user in users:
+        email = None
+        for attr in user.get("Attributes", []):
+            if attr["Name"] == "email":
+                email = attr["Value"]
+        formatted.append({
+            "username": user["Username"],
+            "email": email,
+            "status": user["UserStatus"],
+            "enabled": user["Enabled"],
+        })
+
+    return formatted
+
+
+def get_events_starting_soon():
+    """
+    Retrieve all events that start about 3 hours from now (±5 minutes tolerance)
+    by calling the Ticket-Booking microservice's /api/events/starting-soon endpoint.
+    """
+    try:
+        print("[INFO] Fetching 'starting-soon' events from booking service...")
+        events_url = f"{BOOKING_SERVICE_URL}/api/events/starting-soon"
+
+        # Use the same internal helper you use for other services
+        res = request_json("GET", events_url)
+
+        if res.status_code >= 400:
+            print(f"[ERROR] Booking service returned {res.status_code}: {res.text}")
+            return []
+
+        payload = res.json()
+        events = payload.get("events", [])
+        print(f"[INFO] Retrieved {len(events)} upcoming events from booking service")
+        
+        # Optionally, normalize structure before returning
+        normalized = [
+            {
+                "event_id": e.get("event_id"),
+                "title": e.get("title", "Untitled Event"),
+                "num_bookings": e.get("num_bookings", 0),
+                "user_ids": e.get("user_ids", []),
+            }
+            for e in events
+        ]
+
+        return normalized
+
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch events from booking service: {e}")
+        return []
+
+def enqueue_notifications(payload: dict):
+    """Send a message to the notifications SQS queue."""
+    try:
+        response = sqs.send_message(
+            QueueUrl=SQS_NOTIFICATION_QUEUE_URL,
+            MessageBody=json.dumps(payload)
+        )
+        print(f"[SQS] Enqueued notification: {payload} → MessageId={response['MessageId']}")
+        return response
+    except Exception as e:
+        print(f"[ERROR] Failed to enqueue SQS message: {e}")
+        return None
+    
 @app.post("/internal/scheduler-trigger")
 def scheduler_trigger():
-    """
-    Endpoint for EventBridge Scheduler to invoke periodically.
-    This can trigger internal orchestrations or background checks.
-    """
-    print("Scheduler trigger received!")
-    payload = request.get_json(silent=True) or {}
-    print("Payload:", payload)
+    events = get_events_starting_soon()      # query DynamoDB
+    users = get_all_cognito_users()          # query Cognito
+    user_map = {u["username"]: u["email"] for u in users}
 
-    # Example: Call a microservice or perform a periodic check
-    # Example below just pings the booking service health endpoint:
-    try:
-        health_url = f"{BOOKING_SERVICE_URL}/healthz"
-        res = request_json("GET", health_url, headers={})
-        print("Booking service health:", res.status_code)
-    except Exception as e:
-        print("Health check failed:", e)
-
-    return jsonify({"status": "triggered", "source": "eventbridge", "payload": payload}), 200
+    for event in events:
+        for user in event["user_ids"]:
+            if user in user_map:
+                message = {
+                    "event_id": event["event_id"],
+                    "title": event["title"],
+                    "user_id": user,
+                    "email": user_map[user],
+                    "message": f"Reminder: {event['title']} starts in 3 hours!"
+                }
+                enqueue_notifications(message)
+    return jsonify({"status": "queued"}), 200
 
 
 if __name__ == "__main__":
