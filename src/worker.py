@@ -69,7 +69,7 @@ def process_booking(message_body: Dict[str, Any]) -> Dict[str, Any]:
         user_id = message_body['user_id']
         amount = message_body['amount']
         currency = message_body['currency']
-        seats = message_body.get('seats')
+        seat_numbers = message_body.get('seat_numbers')
         
         # Prepare headers (no auth needed if services use IAM roles)
         headers = {
@@ -82,8 +82,8 @@ def process_booking(message_body: Dict[str, Any]) -> Dict[str, Any]:
             "num_tickets": num_tickets,
             "user_id": user_id
         }
-        if seats:
-            booking_payload["seats"] = seats
+        if seat_numbers:
+            booking_payload["seat_numbers"] = seat_numbers
         
         print(f"  → Creating booking at: {booking_url}")
         booking_response = requests.post(
