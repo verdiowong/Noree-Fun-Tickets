@@ -1,12 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timezone
 import uuid
 import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 from decimal import Decimal
-from datetime import datetime, timedelta, timezone
 import os
 
 
@@ -425,7 +424,7 @@ def update_booking(booking_id):
     data = request.get_json()
     if not data:
         return jsonify({"error": "No fields to update"}), 400
-    
+
     update_expression = "SET "
     expression_attribute_names = {}
     expression_attribute_values = {}
@@ -464,7 +463,8 @@ def get_events_starting_soon():
         now = datetime.now(timezone.utc)
 
         """
-        Retrieve all events that start about 3 hours from now (±5 minutes tolerance),
+        Retrieve all events that start about 3 hours from now \
+        (±5 minutes tolerance),
         and include the list of users who booked each event.
         """
         # tolerance = timedelta(minutes=5)
@@ -473,7 +473,6 @@ def get_events_starting_soon():
         """
         Retrieve everything in the future (for testing purposes)
         """
-        
 
         # Scan all events
         response = events_table.scan()
@@ -489,26 +488,29 @@ def get_events_starting_soon():
 
                 # Convert both timezone-naive and timezone-aware dates safely
                 if "Z" in raw_date or "+" in raw_date:
-                    event_date = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                    event_date = datetime.fromisoformat(raw_date
+                                                        .replace("Z", "+00:00"))
                 else:
                     # assume UTC if no timezone is present
-                    event_date = datetime.fromisoformat(raw_date).replace(tzinfo=timezone.utc)
+                    event_date = datetime.fromisoformat(raw_date).replace(
+                        tzinfo=timezone.utc
+                    )
 
                 print(f"Event {item['event_id']} date: {event_date}")
 
                 # Check if event_date is within ±5 minutes of (now + 3h)
                 # if abs((event_date - target_time)) <= tolerance:
-                
                 # Any future events(testing purposes) 
                 if event_date > now:
-
                     event_id = item["event_id"]
 
-                    print(f"Processing event {event_id} scheduled at {event_date.isoformat()}")
+                    print(f"Processing event {event_id} \
+                          scheduled at {event_date.isoformat()}")
 
                     # Query the Bookings table for users who booked this event
                     bookings_response = bookings_table.query(
-                        IndexName="EventIdIndex",  # Must exist (event_id as GSI)
+                        # Must exist (event_id as GSI)
+                        IndexName="EventIdIndex",
                         KeyConditionExpression=Key("event_id").eq(event_id)
                     )
                     user_bookings = bookings_response.get("Items", [])
@@ -526,7 +528,8 @@ def get_events_starting_soon():
                     upcoming_events.append(event_data)
 
             except Exception as e:
-                print(f"Skipping event {item.get('event_id')}: invalid date format ({e})")
+                print(f"Skipping event {item.get('event_id')}: \
+                      invalid date format ({e})")
 
         return jsonify({
             "count": len(upcoming_events),
