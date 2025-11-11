@@ -485,9 +485,16 @@ def get_events_starting_soon():
 
         for item in items:
             try:
-                event_date = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+                raw_date = item["date"]
 
-                print(f"Event {item['event_id']} date: {event_date.isoformat()}")
+                # Convert both timezone-naive and timezone-aware dates safely
+                if "Z" in raw_date or "+" in raw_date:
+                    event_date = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                else:
+                    # assume UTC if no timezone is present
+                    event_date = datetime.fromisoformat(raw_date).replace(tzinfo=timezone.utc)
+
+                print(f"Event {item['event_id']} date: {event_date}")
 
                 # Check if event_date is within ±5 minutes of (now + 3h)
                 # if abs((event_date - target_time)) <= tolerance:
@@ -498,7 +505,7 @@ def get_events_starting_soon():
                     event_id = item["event_id"]
 
                     print(f"Processing event {event_id} scheduled at {event_date.isoformat()}")
-                    
+
                     # Query the Bookings table for users who booked this event
                     bookings_response = bookings_table.query(
                         IndexName="EventIdIndex",  # Must exist (event_id as GSI)
