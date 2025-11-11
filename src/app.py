@@ -485,7 +485,7 @@ def proxy_to_service():
     params = data if (method == "GET" and isinstance(data, dict)) else None
     json_body = None if method == "GET" else data
 
-    # ✅ FIX: define json_body before checking if it’s a string
+    # Define json_body before checking if it’s a string
     if isinstance(json_body, str):
         try:
             json_body = json.loads(json_body)
