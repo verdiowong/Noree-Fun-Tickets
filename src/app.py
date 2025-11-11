@@ -450,7 +450,6 @@ def update_booking(booking_id):
     return jsonify(response), 200
 
 
-
 @app.route("/api/events/starting-soon", methods=["GET"])
 def get_events_starting_soon():
     """
