@@ -261,18 +261,48 @@ def update_reminder(reminder_id):
 
 # sqs polling to process notification jobs
 def send_email_from_queue(body):
-    """Send email directly from an SQS message payload."""
+    """Send email directly from an SQS message payload via Mailjet."""
     try:
-        email_data = {
-            "email": body["email"],
-            "subject": f"Reminder: {body['title']}",
-            "message": body["message"],
-            "user_id": body.get("user_id", "unknown")
-        }
-        send_notification("email", email_data)
-        print(f"[EMAIL] Sent queued email to {email_data['email']}")
+        email = body["email"]
+        subject = f"Reminder: {body.get('title', 'Event')}"
+        message = body["message"]
+
+        # Send through Mailjet API
+        response = requests.post(
+            "https://api.mailjet.com/v3.1/send",
+            auth=(MAILJET_API_KEY, MAILJET_SECRET_KEY),
+            json={
+                "Messages": [
+                    {
+                        "From": {"Email": "vishnul.2023@smu.edu.sg", "Name": "Event Reminder"},
+                        "To": [{"Email": email}],
+                        "Subject": subject,
+                        "TextPart": message
+                    }
+                ]
+            },
+            timeout=10
+        )
+
+        if response.status_code == 200:
+            print(f"[EMAIL] Sent queued email to {email}")
+            # Log to DynamoDB
+            table_notifications.put_item(
+                Item={
+                    "notification_id": str(uuid.uuid4()),
+                    "user_id": body.get("user_id", "unknown"),
+                    "type": "EMAIL",
+                    "message": message,
+                    "status": "SENT",
+                    "created_at": str(datetime.utcnow())
+                }
+            )
+        else:
+            print(f"❌ [EMAIL] Failed to send via Mailjet ({response.status_code}): {response.text}")
+
     except Exception as e:
         print(f"[ERROR] Failed to send email from queue: {e}")
+
 
 
 def send_sms_from_queue(body):
