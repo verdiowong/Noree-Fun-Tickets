@@ -5,6 +5,8 @@ from flask_cors import CORS
 from .cognito_client import build_cognito_client, CognitoClient
 from .cognito_auth import build_verifier_from_env, CognitoVerifier
 
+# API_KEY = "secret_5ebe2294ecd0e0f08eab7690d2a6ee69"
+
 # -------------------------
 # Config
 # -------------------------
