@@ -325,7 +325,7 @@ def book_event(event_id):
     num_tickets = int(data.get("num_tickets", 1))
     user_id = str(data.get("user_id", ""))
     seat_numbers = data.get("seat_numbers", [])
-    status = data.get("status", "pending")
+    status = data.get("status", "")
 
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
@@ -423,31 +423,38 @@ def get_booking(booking_id):
 @app.route('/api/bookings/<booking_id>', methods=['PATCH'])
 def update_booking(booking_id):
     data = request.get_json()
+    if not data:
+        return jsonify({"error": "No fields to update"}), 400
+    
     update_expression = "SET "
+    expression_attribute_names = {}
     expression_attribute_values = {}
     first = True
 
-    for key, value in data.items():
+    for i, (key, value) in enumerate(data.items()):
         if not first:
             update_expression += ", "
-        update_expression += f"{key} = :{key}"
-        expression_attribute_values[f":{key}"] = value
+        # Use placeholders to handle reserved keywords like "status"
+        name_placeholder = f"#attr{i}"
+        value_placeholder = f":val{i}"
+        update_expression += f"{name_placeholder} = {value_placeholder}"
+        expression_attribute_names[name_placeholder] = key
+        expression_attribute_values[value_placeholder] = value
         first = False
 
     try:
-        bookings_table.update_item(
+        response = bookings_table.update_item(
             Key={"booking_id": booking_id},
             UpdateExpression=update_expression,
-            ExpressionAttributeValues=expression_attribute_values
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values,
+            ReturnValues="ALL_NEW"
         )
+        updated_booking = convert_from_decimal(response.get("Attributes", {}))
+        return jsonify(updated_booking), 200
     except Exception as e:
+        app.logger.error(f"Update booking failed: {e}")
         return jsonify({"error": str(e)}), 500
-
-    response = {
-        "booking_id": booking_id,
-        "updated_fields": data
-    }
-    return jsonify(response), 200
 
 
 @app.route("/api/events/starting-soon", methods=["GET"])
