@@ -373,15 +373,15 @@ class CognitoClient:
                         groups = []
                     
                     role = attributes.get('custom:role', 'USER')
-                    if 'admin' in groups:
+                    if 'ADMIN' in groups:
                         role = 'ADMIN'
-                    elif 'user' in groups or not groups:
+                    elif 'USER' in groups or not groups:
                         role = 'USER'
                     
                     users.append({
                         'user_id': user['Username'],
                         'email': attributes.get('email', user['Username']),
-                        'name': attributes.get('name', ''),
+                        'name': attributes.get('preferred_username', ''),
                         'role': role.upper(),
                         'created_at': user.get('UserCreateDate', datetime.now(UTC)).isoformat(),
                         'enabled': user.get('Enabled', True)
@@ -442,4 +442,3 @@ def build_cognito_client() -> Optional[CognitoClient]:
         return None
     
     return CognitoClient(region, user_pool_id, app_client_id)
-
