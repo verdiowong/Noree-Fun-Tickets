@@ -568,21 +568,50 @@ def proxy_to_service():
             pass
 
 
-    res = request_json(method, target_url, headers=headers, json=json_body, params=params)
+    try:
+        res = request_json(method, target_url, headers=headers, json=json_body, params=params)
+    except Exception as e:
+        # If the request itself fails (connection error, etc.)
+        return jsonify({
+            "success": False,
+            "data": None,
+            "message": f"Failed to connect to service: {str(e)}"
+        }), 500
 
     # Attempt to pass through JSON response; on non-JSON, wrap as text
     try:
+        # httpx.Response.json() parses JSON and returns a dict
         body = res.json()
-    except Exception:
-        body = {"message": res.text}
+    except Exception as e:
+        # If response is not JSON (e.g., HTML error page), extract text
+        # Truncate long responses to avoid issues
+        response_text = res.text[:500] if hasattr(res, 'text') else str(res)
+        body = {"message": response_text, "error": "Response is not valid JSON"}
 
     status = res.status_code
     success = 200 <= status < 300
-    return jsonify({
-        "success": success,
-        "data": body if success else None,
-        "message": None if success else body.get("error") or body.get("message") or "Request failed"
-    }), status
+    
+    # If the response body is already a dict with error info, use it
+    # Otherwise, wrap it appropriately
+    if success:
+        return jsonify({
+            "success": True,
+            "data": body,
+            "message": None
+        }), status
+    else:
+        # For error responses, extract error message from body
+        error_msg = None
+        if isinstance(body, dict):
+            error_msg = body.get("error") or body.get("message") or "Request failed"
+        else:
+            error_msg = str(body) if body else "Request failed"
+        
+        return jsonify({
+            "success": False,
+            "data": None,
+            "message": error_msg
+        }), status
 
 
 
