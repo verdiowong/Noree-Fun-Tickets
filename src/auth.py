@@ -71,7 +71,7 @@ class CognitoVerifier:
 
 def build_verifier_from_env() -> Optional[CognitoVerifier]:
     region = _env("COGNITO_REGION")
-    pool = _env("COGNITO_USER_POOL_ID_")
+    pool = _env("COGNITO_USER_POOL_ID")
     client_id = _env("COGNITO_APP_CLIENT_ID")
     if not (region and pool and client_id):
         return None
