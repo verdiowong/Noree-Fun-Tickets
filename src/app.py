@@ -18,6 +18,14 @@ app = Flask(__name__)
 CORS(app)
 _verifier = build_verifier_from_env()
 
+# At the top of app.py after _verifier = build_verifier_from_env()
+if _verifier:
+    print("[AUTH] JWT verification ENABLED")
+else:
+    print("[AUTH] JWT verification DISABLED - missing env vars")
+    print(f"  COGNITO_REGION: {os.environ.get('COGNITO_REGION')}")
+    print(f"  COGNITO_USER_POOL_ID: {os.environ.get('COGNITO_USER_POOL_ID')}")
+    print(f"  COGNITO_APP_CLIENT_ID: {os.environ.get('COGNITO_APP_CLIENT_ID')}")
 
 # Intialize Cognito client 
 cognito = boto3.client("cognito-idp", region_name=AWS_REGION)
@@ -496,22 +504,71 @@ def proxy_to_service():
     method = (payload.get("method") or "GET").upper()
     data = payload.get("data")
 
+    # Endpoints that don't require authentication
     allow_unauth = (service == "admin" and endpoint in ("/api/users/login", "/api/users/register"))
 
+    # ============ ENHANCED AUTH DEBUGGING ============
+    auth_header = request.headers.get("Authorization")
+    print("=" * 80)
+    print("[DEBUG] PROXY REQUEST DETAILS:")
+    print(f"  Service: {service}")
+    print(f"  Endpoint: {endpoint}")
+    print(f"  Method: {method}")
+    print(f"  Allow Unauth: {allow_unauth}")
+    print(f"  Auth Header Present: {bool(auth_header)}")
+    print(f"  Verifier Initialized: {bool(_verifier)}")
+    if auth_header:
+        print(f"  Auth Header (first 50 chars): {auth_header[:50]}...")
+    print("=" * 80)
+
+    # Auth validation
     claims = None
-    if not allow_unauth and _verifier:
-        claims, err = _verifier.verify_authorization_header(request.headers.get("Authorization"))
+    if not allow_unauth:
+        # Check if auth is configured
+        if not _verifier:
+            print("[ERROR] Authentication verifier not initialized - check environment variables")
+            return jsonify({
+                "success": False,
+                "message": "Authentication not configured on server. Missing Cognito environment variables."
+            }), 500
+
+        # Check if auth header is present
+        if not auth_header:
+            print("[ERROR] Missing Authorization header")
+            return jsonify({
+                "success": False,
+                "message": "Missing Authorization header. Please include 'Authorization: Bearer <token>' in your request."
+            }), 401
+
+        # Verify the token
+        claims, err = _verifier.verify_authorization_header(auth_header)
         if err:
-            return jsonify({"success": False, "message": err}), 401
+            print(f"[ERROR] Token verification failed: {err}")
+            return jsonify({
+                "success": False,
+                "message": f"Authentication failed: {err}"
+            }), 401
+
+        print(f"[SUCCESS] Token verified for user: {claims.get('sub', 'unknown')}")
+
         # Enforce admin-only for admin endpoints when auth is enabled
         if endpoint.startswith("/api/admin"):
             groups = claims.get("cognito:groups") or []
             role_claim = claims.get("role")
             is_admin = (isinstance(groups, list) and ("ADMIN" in groups)) or role_claim == "ADMIN"
+            
+            print(f"[DEBUG] Admin check - Groups: {groups}, Role: {role_claim}, Is Admin: {is_admin}")
+            
             if not is_admin:
-                return jsonify({"success": False, "message": "Forbidden: admin role required"}), 403
+                print("[ERROR] User is not admin but tried to access admin endpoint")
+                return jsonify({
+                    "success": False,
+                    "message": "Forbidden: admin role required"
+                }), 403
 
+    # Validate required fields
     if not service or not endpoint:
+        print("[ERROR] Missing required fields in request")
         return jsonify({
             "success": False,
             "message": "Missing required fields: service, endpoint"
@@ -531,58 +588,83 @@ def proxy_to_service():
 
     base = base_url_map.get(service)
     if not base:
+        print(f"[ERROR] Unknown service: {service}")
         return jsonify({
             "success": False,
-            "message": f"Unknown service: {service}"
+            "message": f"Unknown service: {service}. Valid services: {', '.join(base_url_map.keys())}"
         }), 400
 
-    print("service called:", service)
-    print("endpoint called:", endpoint)
-    print("method called:", method)
-    print("url called:", f"{base}")
-    print("target_url called:", f"{base}{endpoint}")
-
+    # Ensure endpoint starts with /
     if not endpoint.startswith("/"):
         endpoint = "/" + endpoint
 
-
     target_url = f"{base}{endpoint}"
+    
+    print(f"[INFO] Proxying request:")
+    print(f"  Target URL: {target_url}")
+    print(f"  Method: {method}")
+    print(f"  Has Data: {bool(data)}")
 
+    # Build headers for downstream service
     headers = _auth_headers(request.headers)
+    
     # Inject user context for downstream services
     if not allow_unauth and _verifier and claims:
         headers["X-User-Id"] = claims.get("sub", "")
         roles = claims.get("cognito:groups") or []
         if isinstance(roles, list):
             headers["X-User-Roles"] = ",".join(roles)
+        
+        print(f"[INFO] Injected user context headers:")
+        print(f"  X-User-Id: {headers.get('X-User-Id')}")
+        print(f"  X-User-Roles: {headers.get('X-User-Roles')}")
 
     # For GET, treat data as query params; otherwise send JSON body
     params = data if (method == "GET" and isinstance(data, dict)) else None
     json_body = None if method == "GET" else data
 
-    # ✅ FIX: define json_body before checking if it’s a string
+    # Handle case where json_body is a string (parse it)
     if isinstance(json_body, str):
         try:
             json_body = json.loads(json_body)
-        except Exception:
-            pass
+            print("[INFO] Parsed string data as JSON")
+        except Exception as e:
+            print(f"[WARN] Could not parse data string as JSON: {e}")
 
-
-    res = request_json(method, target_url, headers=headers, json=json_body, params=params)
+    # Make the request to downstream service
+    try:
+        print(f"[INFO] Sending request to downstream service...")
+        res = request_json(method, target_url, headers=headers, json=json_body, params=params)
+        print(f"[INFO] Downstream service responded with status: {res.status_code}")
+        
+    except Exception as e:
+        print(f"[ERROR] Request to downstream service failed: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Failed to connect to {service} service: {str(e)}"
+        }), 503
 
     # Attempt to pass through JSON response; on non-JSON, wrap as text
     try:
         body = res.json()
-    except Exception:
+        print(f"[INFO] Response body: {json.dumps(body, indent=2)[:500]}...")
+    except Exception as e:
         body = {"message": res.text}
+        print(f"[WARN] Non-JSON response from downstream service: {res.text[:200]}")
 
     status = res.status_code
     success = 200 <= status < 300
-    return jsonify({
+    
+    result = {
         "success": success,
         "data": body if success else None,
         "message": None if success else body.get("error") or body.get("message") or "Request failed"
-    }), status
+    }
+    
+    print(f"[INFO] Returning response - Success: {success}, Status: {status}")
+    print("=" * 80)
+    
+    return jsonify(result), status
 
 
 

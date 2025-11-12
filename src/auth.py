@@ -48,13 +48,12 @@ class CognitoVerifier:
             keys = jwks.get("keys", [])
             key = next((k for k in keys if k.get("kid") == kid), None)
             if not key:
-                # refresh once in case of rotation
                 self._jwks_cache = None
                 jwks = self._get_jwks()
                 keys = jwks.get("keys", [])
                 key = next((k for k in keys if k.get("kid") == kid), None)
                 if not key:
-                    return None, "Signing key not found"
+                    return None, f"Signing key not found for kid: {kid}"
 
             public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
             claims = jwt.decode(
@@ -65,8 +64,14 @@ class CognitoVerifier:
                 issuer=self.issuer,
             )
             return claims, None
+        except jwt.ExpiredSignatureError:
+            return None, "Token has expired"
+        except jwt.InvalidAudienceError:
+            return None, "Invalid token audience"
+        except jwt.InvalidIssuerError:
+            return None, "Invalid token issuer"
         except Exception as e:
-            return None, str(e)
+            return None, f"Token validation failed: {str(e)}"
 
 
 def build_verifier_from_env() -> Optional[CognitoVerifier]:
