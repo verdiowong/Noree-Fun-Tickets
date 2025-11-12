@@ -221,7 +221,7 @@ def login():
 def get_profile():
     uid = request.claims.get("sub") or request.claims.get("username")
     if not uid:
-        return jsonify({"error": "Invalid token"}), 401
+        return jsonify({"error": "Invalid token"}), 401 
 
     user = _get_user_by_id(uid)
     if not user:
