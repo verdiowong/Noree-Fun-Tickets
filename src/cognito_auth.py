@@ -7,7 +7,7 @@ from typing import Dict, Optional, Tuple
 
 import httpx
 import jwt
-
+import json
 
 def _env(name: str, default: Optional[str] = None) -> Optional[str]:
     return os.getenv(name, default)
@@ -65,7 +65,8 @@ class CognitoVerifier:
                 if not key:
                     return None, "Signing key not found"
 
-            public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
+            public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key))
+
             claims = jwt.decode(
                 token,
                 key=public_key,
