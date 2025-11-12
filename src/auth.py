@@ -57,8 +57,6 @@ class CognitoVerifier:
                 if not key:
                     return None, f"Signing key not found for kid: {kid}"
 
-            # ✅ FIX: Convert dict to JSON string before passing to from_jwk
-            import json
             public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key))
             
             claims = jwt.decode(
