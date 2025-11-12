@@ -3,6 +3,7 @@ import time
 from typing import Dict, Optional, Tuple
 import httpx
 import jwt
+import json
 
 
 def _env(name: str, default: Optional[str] = None) -> Optional[str]:
@@ -48,6 +49,7 @@ class CognitoVerifier:
             keys = jwks.get("keys", [])
             key = next((k for k in keys if k.get("kid") == kid), None)
             if not key:
+                # refresh once in case of rotation
                 self._jwks_cache = None
                 jwks = self._get_jwks()
                 keys = jwks.get("keys", [])
@@ -55,7 +57,10 @@ class CognitoVerifier:
                 if not key:
                     return None, f"Signing key not found for kid: {kid}"
 
-            public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
+            # ✅ FIX: Convert dict to JSON string before passing to from_jwk
+            import json
+            public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key))
+            
             claims = jwt.decode(
                 token,
                 key=public_key,
@@ -70,6 +75,8 @@ class CognitoVerifier:
             return None, "Invalid token audience"
         except jwt.InvalidIssuerError:
             return None, "Invalid token issuer"
+        except jwt.DecodeError as e:
+            return None, f"Token decode error: {str(e)}"
         except Exception as e:
             return None, f"Token validation failed: {str(e)}"
 
