@@ -1,0 +1,79 @@
+version: "3.9"
+
+services:
+  admin:
+    build:
+      context: ./services/admin
+      dockerfile: Dockerfile
+    container_name: noree-admin
+    ports:
+      - "8001:8000"
+    environment:
+      # Example env vars – adjust to your needs
+      - APP_ENV=development
+    depends_on: []
+
+  booking-coordinator:
+    build:
+      context: ./services/booking-coordinator
+      dockerfile: Dockerfile
+    container_name: noree-booking-coordinator
+    ports:
+      - "8002:8000"
+    environment:
+      - APP_ENV=development
+    depends_on:
+      - admin
+
+  booking-worker:
+    build:
+      context: ./services/booking-worker
+      dockerfile: Dockerfile
+    container_name: noree-booking-worker
+    environment:
+      - APP_ENV=development
+    depends_on:
+      - booking-coordinator
+
+  notifications:
+    build:
+      context: ./services/notifications
+      dockerfile: Dockerfile
+    container_name: noree-notifications
+    ports:
+      - "8003:8000"
+    environment:
+      - APP_ENV=development
+    depends_on:
+      - admin
+
+  payment:
+    build:
+      context: ./services/payment
+      dockerfile: Dockerfile
+    container_name: noree-payment
+    ports:
+      - "8004:8000"
+    environment:
+      - APP_ENV=development
+    depends_on:
+      - admin
+
+  ticket-booking:
+    build:
+      context: ./services/ticket-booking
+      dockerfile: Dockerfile
+    container_name: noree-ticket-booking
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+    depends_on:
+      - admin
+      - payment
+      - notifications
+
+networks:
+  default:
+    name: noree-fun-tickets
+
