@@ -1,0 +1,8 @@
+flask
+flask-cors
+python-dotenv
+pytest
+boto3
+httpx
+PyJWT==1.7.1
+python-jose[cryptography]==3.3.0
